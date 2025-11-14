@@ -21,9 +21,47 @@ const app = express();
 const PORT = parseInt(process.env.PORT, 10) || 3001;
 
 // CORS configuration
+// Support multiple frontend URLs (for production, preview, and local dev)
+const getAllowedOrigins = () => {
+  const origins = [];
+  
+  // Primary frontend URL
+  if (process.env.FRONTEND_URL) {
+    origins.push(process.env.FRONTEND_URL);
+  }
+  
+  // Additional frontend URLs (comma-separated)
+  if (process.env.FRONTEND_URLS) {
+    origins.push(...process.env.FRONTEND_URLS.split(',').map(url => url.trim()));
+  }
+  
+  // Local development
+  if (process.env.NODE_ENV !== 'production') {
+    origins.push('http://localhost:3000');
+  }
+  
+  return origins.length > 0 ? origins : ['http://localhost:3000'];
+};
+
 const corsOptions = {
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: (origin, callback) => {
+    const allowedOrigins = getAllowedOrigins();
+    
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) {
+      return callback(null, true);
+    }
+    
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn(`CORS blocked origin: ${origin}. Allowed: ${allowedOrigins.join(', ')}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 };
 
 app.use(cors(corsOptions));
