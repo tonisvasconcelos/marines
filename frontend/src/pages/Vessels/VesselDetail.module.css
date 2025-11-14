@@ -142,6 +142,11 @@
   overflow: hidden;
 }
 
+.mapCard > div {
+  height: 500px;
+  min-height: 500px;
+}
+
 .tabs {
   display: flex;
   gap: 8px;
