@@ -36,11 +36,6 @@
   pointer-events: none; /* Allow clicks to pass through to map */
 }
 
-/* Re-enable pointer events for interactive elements */
-.overlayContent > * {
-  pointer-events: auto;
-}
-
 /* Left section: Header + KPIs + Map */
 .mainContent {
   flex: 1;
@@ -49,6 +44,12 @@
   min-width: 0;
   padding: 16px;
   gap: 12px;
+  pointer-events: none; /* Allow clicks to pass through to map */
+}
+
+/* Re-enable pointer events for interactive elements */
+.mainContent > *:not(.mapContainer) {
+  pointer-events: auto;
 }
 
 /* Tactical Header - Compact */
@@ -128,6 +129,7 @@
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  pointer-events: auto; /* Ensure right panel is interactive */
   /* Custom scrollbar */
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
@@ -159,6 +161,8 @@
   position: relative;
   /* Ensure map container doesn't cause overflow */
   overflow: hidden;
+  /* Allow pointer events to pass through to map in background */
+  pointer-events: none;
 }
 
 .statsSection {
