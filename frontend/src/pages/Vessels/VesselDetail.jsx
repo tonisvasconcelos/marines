@@ -25,11 +25,22 @@ function VesselDetail() {
     enabled: !!vessel,
   });
 
-  const { data: position, isLoading: positionLoading } = useQuery({
+  const { data: position, isLoading: positionLoading, error: positionError } = useQuery({
     queryKey: ['vessel', id, 'position'],
-    queryFn: () => api.get(`/vessels/${id}/position`),
+    queryFn: async () => {
+      try {
+        const data = await api.get(`/vessels/${id}/position`);
+        console.log('Position data received:', data);
+        return data;
+      } catch (error) {
+        console.error('Failed to fetch vessel position:', error);
+        throw error;
+      }
+    },
     enabled: !!vessel && (!!vessel.imo || !!vessel.mmsi),
     refetchInterval: 60000, // Refetch every minute
+    retry: 1, // Retry once on failure
+    retryDelay: 2000, // Wait 2 seconds before retry
   });
 
   if (isLoading) {
@@ -110,7 +121,16 @@ function VesselDetail() {
                 <h2>{t('vessels.currentPosition')}</h2>
                 {positionLoading ? (
                   <div className={styles.loading}>{t('vessels.loadingPosition')}</div>
-                ) : position ? (
+                ) : positionError ? (
+                  <div className={styles.empty}>
+                    <p>{t('vessels.noAisData')}</p>
+                    {process.env.NODE_ENV === 'development' && (
+                      <p style={{ fontSize: '0.85em', color: '#999', marginTop: '0.5em' }}>
+                        Error: {positionError.message || 'Failed to fetch position'}
+                      </p>
+                    )}
+                  </div>
+                ) : position && position.lat && position.lon ? (
                   <Card className={styles.mapCard}>
                     <MapView
                       position={position}
