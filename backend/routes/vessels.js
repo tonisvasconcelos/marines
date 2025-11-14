@@ -6,6 +6,7 @@ import {
   getCustomersByVessel,
   createVesselCustomerAssociation,
   deleteVesselCustomerAssociation,
+  deleteMockVessel,
 } from '../data/mockData.js';
 
 const router = express.Router();
@@ -392,6 +393,27 @@ router.get('/:id', async (req, res) => {
   }
   
   res.json(vessel);
+});
+
+// DELETE /api/vessels/:id - Delete a vessel
+router.delete('/:id', async (req, res) => {
+  const { tenantId } = req;
+  const { id } = req.params;
+  
+  const vessels = getMockVessels(tenantId);
+  const vessel = vessels.find((v) => v.id === id && v.tenantId === tenantId);
+  
+  if (!vessel) {
+    return res.status(404).json({ message: 'Vessel not found' });
+  }
+  
+  const deleted = deleteMockVessel(id, tenantId);
+  
+  if (!deleted) {
+    return res.status(500).json({ message: 'Failed to delete vessel' });
+  }
+  
+  res.json({ message: 'Vessel deleted successfully' });
 });
 
 export default router;

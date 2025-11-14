@@ -75,6 +75,34 @@ export function createMockVessel(tenantId, data) {
   return newVessel;
 }
 
+/**
+ * Delete a vessel
+ */
+export function deleteMockVessel(vesselId, tenantId) {
+  const index = mockVessels.findIndex(
+    (v) => v.id === vesselId && v.tenantId === tenantId
+  );
+  
+  if (index === -1) {
+    return false;
+  }
+  
+  mockVessels.splice(index, 1);
+  
+  // Also clean up related associations
+  // Remove vessel-customer associations
+  mockVesselCustomerAssociations = mockVesselCustomerAssociations.filter(
+    (a) => a.vesselId !== vesselId
+  );
+  
+  // Remove agent-vessel associations
+  mockAgentVesselAssociations = mockAgentVesselAssociations.filter(
+    (a) => a.vesselId !== vesselId
+  );
+  
+  return true;
+}
+
 export function getMockPorts() {
   return [
     {

@@ -1,18 +1,20 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useI18n } from '../../utils/useI18n';
 import { api } from '../../utils/api';
 import Card from '../../components/ui/Card';
 import KpiCard from '../../components/ui/KpiCard';
 import MapView from '../../components/ais/MapView';
-import { FiSearch, FiCamera } from 'react-icons/fi';
+import { FiSearch, FiCamera, FiTrash2 } from 'react-icons/fi';
 import styles from './VesselDetail.module.css';
 
 function VesselDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { t } = useI18n();
+  const queryClient = useQueryClient();
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Fetch vessel data (includes AIS enrichment)
   const { data: vessel, isLoading } = useQuery({
@@ -47,6 +49,24 @@ function VesselDetail() {
     queryFn: () => api.get(`/vessels/${id}/position-history?limit=1000`),
     enabled: !!vessel && (!!vessel.imo || !!vessel.mmsi),
   });
+
+  // Delete vessel mutation
+  const deleteMutation = useMutation({
+    mutationFn: () => api.delete(`/vessels/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['vessels']);
+      navigate('/vessels');
+    },
+    onError: (error) => {
+      alert(t('vessels.deleteError') || `Failed to delete vessel: ${error.message}`);
+    },
+  });
+
+  const handleDelete = () => {
+    if (window.confirm(t('vessels.deleteConfirm') || `Are you sure you want to delete ${vessel?.name || 'this vessel'}? This action cannot be undone.`)) {
+      deleteMutation.mutate();
+    }
+  };
 
   // Calculate trip metrics from position history (AIS-driven)
   // MUST be called before early returns to follow Rules of Hooks
@@ -178,6 +198,15 @@ function VesselDetail() {
               {aisVesselData.type} • IMO: {aisVesselData.imo} • MMSI: {aisVesselData.mmsi}
             </p>
           </div>
+          <button
+            className={styles.deleteButton}
+            onClick={handleDelete}
+            disabled={deleteMutation.isPending}
+            title={t('vessels.delete') || 'Delete vessel'}
+          >
+            <FiTrash2 />
+            {t('vessels.delete') || 'Delete'}
+          </button>
         </div>
       </div>
 
