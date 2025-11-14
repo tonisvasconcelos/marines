@@ -14,7 +14,6 @@ function VesselDetail() {
   const navigate = useNavigate();
   const { t } = useI18n();
   const queryClient = useQueryClient();
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Fetch vessel data (includes AIS enrichment)
   const { data: vessel, isLoading } = useQuery({
