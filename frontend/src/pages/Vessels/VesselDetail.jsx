@@ -31,7 +31,13 @@ function VesselDetail() {
       try {
         const data = await api.get(`/vessels/${id}/position`);
         console.log('Position data received:', data);
-        return data;
+        // Normalize position data to handle case variations (Lat/lat, Lon/lon)
+        const normalized = {
+          ...data,
+          lat: data.lat || data.Lat || data.latitude || data.Latitude,
+          lon: data.lon || data.Lon || data.longitude || data.Longitude,
+        };
+        return normalized;
       } catch (error) {
         console.error('Failed to fetch vessel position:', error);
         throw error;
@@ -41,6 +47,13 @@ function VesselDetail() {
     refetchInterval: 60000, // Refetch every minute
     retry: 1, // Retry once on failure
     retryDelay: 2000, // Wait 2 seconds before retry
+  });
+
+  // Query for position history
+  const { data: positionHistory, isLoading: historyLoading } = useQuery({
+    queryKey: ['vessel', id, 'position-history'],
+    queryFn: () => api.get(`/vessels/${id}/position-history`),
+    enabled: !!vessel && (!!vessel.imo || !!vessel.mmsi),
   });
 
   if (isLoading) {
@@ -117,32 +130,80 @@ function VesselDetail() {
             </div>
 
             {(vessel.imo || vessel.mmsi) && (
-              <div className={styles.section}>
-                <h2>{t('vessels.currentPosition')}</h2>
-                {positionLoading ? (
-                  <div className={styles.loading}>{t('vessels.loadingPosition')}</div>
-                ) : positionError ? (
-                  <div className={styles.empty}>
-                    <p>{t('vessels.noAisData')}</p>
-                    {process.env.NODE_ENV === 'development' && (
-                      <p style={{ fontSize: '0.85em', color: '#999', marginTop: '0.5em' }}>
-                        Error: {positionError.message || 'Failed to fetch position'}
-                      </p>
-                    )}
-                  </div>
-                ) : position && position.lat && position.lon ? (
-                  <Card className={styles.mapCard}>
-                    <MapView
-                      position={position}
-                      vesselName={vessel.name}
-                    />
-                  </Card>
-                ) : (
-                  <div className={styles.empty}>
-                    {t('vessels.noAisData')}
-                  </div>
-                )}
-              </div>
+              <>
+                <div className={styles.section}>
+                  <h2>{t('vessels.currentPosition')}</h2>
+                  {positionLoading ? (
+                    <div className={styles.loading}>{t('vessels.loadingPosition')}</div>
+                  ) : positionError ? (
+                    <div className={styles.empty}>
+                      <p>{t('vessels.noAisData')}</p>
+                      {process.env.NODE_ENV === 'development' && (
+                        <p style={{ fontSize: '0.85em', color: '#999', marginTop: '0.5em' }}>
+                          Error: {positionError.message || 'Failed to fetch position'}
+                        </p>
+                      )}
+                    </div>
+                  ) : position && position.lat && position.lon ? (
+                    <Card className={styles.mapCard}>
+                      <MapView
+                        position={position}
+                        vesselName={vessel.name}
+                      />
+                    </Card>
+                  ) : (
+                    <div className={styles.empty}>
+                      {t('vessels.noAisData')}
+                    </div>
+                  )}
+                </div>
+
+                <div className={styles.section}>
+                  <h2>{t('vessels.positionHistoryTitle')}</h2>
+                  {historyLoading ? (
+                    <div className={styles.loading}>{t('common.loading')}</div>
+                  ) : positionHistory && positionHistory.length > 0 ? (
+                    <Card>
+                      <div className={styles.tableContainer}>
+                        <table className={styles.table}>
+                          <thead>
+                            <tr>
+                              <th>{t('vessels.positionHistory.timestamp')}</th>
+                              <th>{t('vessels.positionHistory.latitude')}</th>
+                              <th>{t('vessels.positionHistory.longitude')}</th>
+                              <th>{t('vessels.positionHistory.speed')}</th>
+                              <th>{t('vessels.positionHistory.course')}</th>
+                              <th>{t('vessels.positionHistory.heading')}</th>
+                              <th>{t('vessels.positionHistory.status')}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {positionHistory.map((pos) => (
+                              <tr key={pos.id || pos.timestamp}>
+                                <td>
+                                  {pos.timestamp
+                                    ? new Date(pos.timestamp).toLocaleString()
+                                    : '-'}
+                                </td>
+                                <td>{pos.lat?.toFixed(6) || pos.Lat?.toFixed(6) || '-'}</td>
+                                <td>{pos.lon?.toFixed(6) || pos.Lon?.toFixed(6) || '-'}</td>
+                                <td>{pos.sog ? `${pos.sog.toFixed(1)} kn` : '-'}</td>
+                                <td>{pos.cog ? `${pos.cog.toFixed(0)}°` : '-'}</td>
+                                <td>{pos.heading ? `${pos.heading.toFixed(0)}°` : '-'}</td>
+                                <td>{pos.navStatus || pos.status || '-'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </Card>
+                  ) : (
+                    <div className={styles.empty}>
+                      {t('vessels.noPositionHistory')}
+                    </div>
+                  )}
+                </div>
+              </>
             )}
 
             <div className={styles.section}>

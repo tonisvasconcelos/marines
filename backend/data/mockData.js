@@ -3,6 +3,7 @@
 let mockPortCalls = [];
 let mockVessels = [];
 let mockAisPositions = {};
+let mockPositionHistory = []; // Array of position records: { id, vesselId, tenantId, lat, lon, timestamp, sog, cog, heading, navStatus, source }
 let mockOpsSites = [];
 let mockCustomers = [];
 let mockVesselCustomerAssociations = []; // Array of { vesselId, customerId, tenantId }
@@ -203,6 +204,53 @@ export function getMockAisTrack(vesselId, hours = 24) {
     });
   }
   return positions;
+}
+
+/**
+ * Store a position record in history
+ */
+export function storePositionHistory(vesselId, tenantId, positionData) {
+  const positionRecord = {
+    id: `pos-${vesselId}-${Date.now()}`,
+    vesselId,
+    tenantId,
+    lat: positionData.lat || positionData.Lat || positionData.latitude,
+    lon: positionData.lon || positionData.Lon || positionData.longitude,
+    timestamp: positionData.timestamp || new Date().toISOString(),
+    sog: positionData.sog || positionData.speed,
+    cog: positionData.cog || positionData.course,
+    heading: positionData.heading,
+    navStatus: positionData.navStatus || positionData.status,
+    source: positionData.source || 'ais',
+  };
+  
+  mockPositionHistory.push(positionRecord);
+  
+  // Keep only last 1000 records per vessel to prevent memory issues
+  const vesselPositions = mockPositionHistory.filter(p => p.vesselId === vesselId);
+  if (vesselPositions.length > 1000) {
+    // Remove oldest records
+    const toRemove = vesselPositions.length - 1000;
+    const oldestIds = vesselPositions
+      .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
+      .slice(0, toRemove)
+      .map(p => p.id);
+    mockPositionHistory = mockPositionHistory.filter(p => !oldestIds.includes(p.id));
+  }
+  
+  return positionRecord;
+}
+
+/**
+ * Get position history for a vessel
+ */
+export function getPositionHistory(vesselId, tenantId, limit = 100) {
+  const history = mockPositionHistory
+    .filter(p => p.vesselId === vesselId && p.tenantId === tenantId)
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)) // Newest first
+    .slice(0, limit);
+  
+  return history;
 }
 
 export function getMockOpsSites(tenantId) {

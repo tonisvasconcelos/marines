@@ -209,7 +209,18 @@ router.get('/:id/position', async (req, res) => {
           cog: position.course || position.cog,
           heading: position.heading,
           navStatus: position.nav_status || position.status,
+          source: 'myshiptracking',
         };
+        
+        // Store position in history
+        try {
+          const { storePositionHistory } = await import('../data/mockData.js');
+          storePositionHistory(id, tenantId, positionData);
+        } catch (error) {
+          console.error('Failed to store position history:', error);
+          // Don't fail the request if history storage fails
+        }
+        
         res.json(positionData);
         return;
       }
@@ -222,7 +233,7 @@ router.get('/:id/position', async (req, res) => {
   }
   
   // Fallback to mock data (if AIS provider not configured, failed, or returned no data)
-  const { getMockAisPosition } = await import('../data/mockData.js');
+  const { getMockAisPosition, storePositionHistory } = await import('../data/mockData.js');
   const mockPosition = getMockAisPosition(id);
   
   // Ensure mock position has tenantId for consistency
@@ -230,7 +241,36 @@ router.get('/:id/position', async (req, res) => {
     mockPosition.tenantId = tenantId;
   }
   
+  // Store position in history (only if we have valid coordinates)
+  if (mockPosition && (mockPosition.lat || mockPosition.Lat) && (mockPosition.lon || mockPosition.Lon)) {
+    try {
+      storePositionHistory(id, tenantId, mockPosition);
+    } catch (error) {
+      console.error('Failed to store position history:', error);
+      // Don't fail the request if history storage fails
+    }
+  }
+  
   res.json(mockPosition);
+});
+
+// GET /api/vessels/:id/position-history - Get vessel position history
+router.get('/:id/position-history', async (req, res) => {
+  const { tenantId } = req;
+  const { id } = req.params;
+  const limit = parseInt(req.query.limit) || 100;
+  
+  const vessels = getMockVessels(tenantId);
+  const vessel = vessels.find((v) => v.id === id && v.tenantId === tenantId);
+  
+  if (!vessel) {
+    return res.status(404).json({ message: 'Vessel not found' });
+  }
+  
+  const { getPositionHistory } = await import('../data/mockData.js');
+  const history = getPositionHistory(id, tenantId, limit);
+  
+  res.json(history);
 });
 
 router.get('/:id', async (req, res) => {
