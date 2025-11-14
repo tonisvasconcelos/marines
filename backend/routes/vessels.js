@@ -63,6 +63,75 @@ router.get('/', async (req, res) => {
   res.json(vessels);
 });
 
+// GET /api/vessels/preview-position - Get position preview by IMO or MMSI (for form)
+router.get('/preview-position', async (req, res) => {
+  const { tenantId } = req;
+  const { imo, mmsi } = req.query;
+  
+  if (!imo && !mmsi) {
+    return res.status(400).json({ message: 'IMO or MMSI is required' });
+  }
+  
+  const aisConfig = getAisConfig(tenantId);
+  
+  // Try to get position from AIS provider if configured
+  if (aisConfig?.provider === 'myshiptracking' && aisConfig?.apiKey) {
+    try {
+      let position = null;
+      
+      if (mmsi) {
+        position = await myshiptracking.getVesselPosition(
+          mmsi,
+          aisConfig.apiKey,
+          aisConfig.secretKey
+        );
+      } else if (imo) {
+        // Remove 'IMO' prefix if present
+        const imoNumber = imo.replace(/^IMO/i, '').trim();
+        position = await myshiptracking.getVesselByImo(
+          imoNumber,
+          aisConfig.apiKey,
+          aisConfig.secretKey
+        );
+      }
+      
+      if (position && (position.latitude || position.lat)) {
+        // Transform MyShipTracking response to our format
+        const positionData = {
+          lat: position.latitude || position.lat,
+          lon: position.longitude || position.lon,
+          timestamp: position.timestamp || position.last_position_time || new Date().toISOString(),
+          sog: position.speed || position.sog,
+          cog: position.course || position.cog,
+          heading: position.heading,
+          navStatus: position.nav_status || position.status,
+          source: 'myshiptracking',
+        };
+        res.json(positionData);
+        return;
+      }
+    } catch (error) {
+      console.warn(`Failed to fetch preview position from AIS provider:`, error.message);
+      // Fall back to mock data
+    }
+  }
+  
+  // Fallback to mock data (if AIS provider not configured, failed, or returned no data)
+  const { getMockAisPosition } = await import('../data/mockData.js');
+  // Use a temporary vessel ID for mock data
+  const tempVesselId = `temp-${imo || mmsi}`;
+  const mockPosition = getMockAisPosition(tempVesselId);
+  
+  // Normalize position data
+  const positionData = {
+    ...mockPosition,
+    lat: mockPosition.lat || mockPosition.Lat,
+    lon: mockPosition.lon || mockPosition.Lon,
+  };
+  
+  res.json(positionData);
+});
+
 router.post('/', async (req, res) => {
   const { tenantId } = req;
   const { name, imo, mmsi, callSign, flag } = req.body;

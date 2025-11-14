@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { api } from '../../utils/api';
 import Card from '../ui/Card';
+import MapView from '../ais/MapView';
 import styles from './VesselForm.module.css';
 
 function VesselForm({ onClose, vessel = null }) {
@@ -14,10 +15,36 @@ function VesselForm({ onClose, vessel = null }) {
     flag: vessel?.flag || '',
   });
 
+  // Extract IMO number for position lookup (remove 'IMO' prefix if present)
+  const imoNumber = formData.imo ? formData.imo.replace(/^IMO/i, '').trim() : '';
+  const hasIdentifier = (imoNumber && imoNumber.length > 0) || (formData.mmsi && formData.mmsi.length > 0);
+  
+  // Fetch AIS position preview when IMO or MMSI is provided
+  const { data: position, isLoading: positionLoading, error: positionError } = useQuery({
+    queryKey: ['vessel-position-preview', imoNumber || formData.mmsi],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (imoNumber) params.append('imo', imoNumber);
+      if (formData.mmsi) params.append('mmsi', formData.mmsi);
+      
+      const data = await api.get(`/vessels/preview-position?${params.toString()}`);
+      // Normalize position data to handle case variations
+      return {
+        ...data,
+        lat: data.lat || data.Lat || data.latitude || data.Latitude,
+        lon: data.lon || data.Lon || data.longitude || data.Longitude,
+      };
+    },
+    enabled: hasIdentifier && (imoNumber.length >= 7 || (formData.mmsi && formData.mmsi.length >= 9)),
+    retry: 1,
+    retryDelay: 1000,
+  });
+
   const createMutation = useMutation({
     mutationFn: (data) => api.post('/vessels', data),
-    onSuccess: () => {
+    onSuccess: (newVessel) => {
       queryClient.invalidateQueries(['vessels']);
+      // If vessel was created with IMO/MMSI, we could fetch position here
       onClose();
     },
     onError: (error) => {
@@ -97,6 +124,39 @@ function VesselForm({ onClose, vessel = null }) {
               maxLength={2}
             />
           </div>
+
+          {/* AIS Position Map Preview */}
+          {hasIdentifier && (
+            <div className={styles.field}>
+              <label>Vessel Position (AIS)</label>
+              {positionLoading ? (
+                <div className={styles.loading}>Loading position...</div>
+              ) : positionError ? (
+                <div className={styles.error}>
+                  Unable to fetch position. {positionError.message || 'Please check IMO/MMSI and AIS configuration.'}
+                </div>
+              ) : position && position.lat && position.lon ? (
+                <div className={styles.mapPreview}>
+                  <MapView
+                    position={position}
+                    vesselName={formData.name || 'Vessel'}
+                  />
+                  <div className={styles.positionInfo}>
+                    <small>
+                      <strong>Lat:</strong> {position.lat.toFixed(6)}, <strong>Lon:</strong> {position.lon.toFixed(6)}
+                      {position.sog && ` | Speed: ${position.sog.toFixed(1)} kn`}
+                      {position.cog && ` | Course: ${position.cog.toFixed(0)}°`}
+                    </small>
+                  </div>
+                </div>
+              ) : hasIdentifier ? (
+                <div className={styles.info}>
+                  <small>Enter a valid IMO (7 digits) or MMSI (9 digits) to see vessel position on map.</small>
+                </div>
+              ) : null}
+            </div>
+          )}
+
           <div className={styles.actions}>
             <button type="button" className={styles.cancelButton} onClick={onClose}>
               Cancel

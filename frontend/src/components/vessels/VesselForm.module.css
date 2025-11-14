@@ -134,3 +134,48 @@
   background-color: var(--gray-50);
 }
 
+.mapPreview {
+  margin-top: 8px;
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.mapPreview > div {
+  height: 300px;
+  min-height: 300px;
+}
+
+.positionInfo {
+  padding: 8px 12px;
+  background-color: var(--gray-50);
+  border-top: 1px solid var(--gray-200);
+  font-size: 12px;
+  color: var(--gray-700);
+}
+
+.loading {
+  padding: 20px;
+  text-align: center;
+  color: var(--gray-600);
+  font-size: 14px;
+}
+
+.error {
+  padding: 12px;
+  background-color: #fee;
+  border: 1px solid #fcc;
+  border-radius: var(--radius);
+  color: #c33;
+  font-size: 13px;
+}
+
+.info {
+  padding: 12px;
+  background-color: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  color: var(--gray-600);
+  font-size: 13px;
+}
+
