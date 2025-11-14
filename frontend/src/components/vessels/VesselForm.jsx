@@ -17,7 +17,9 @@ function VesselForm({ onClose, vessel = null }) {
 
   // Extract IMO number for position lookup (remove 'IMO' prefix if present)
   const imoNumber = formData.imo ? formData.imo.replace(/^IMO/i, '').trim() : '';
-  const hasIdentifier = (imoNumber && imoNumber.length > 0) || (formData.mmsi && formData.mmsi.length > 0);
+  const hasValidImo = !!(imoNumber && imoNumber.length >= 7);
+  const hasValidMmsi = !!(formData.mmsi && formData.mmsi.length >= 9);
+  const shouldFetchPosition = hasValidImo || hasValidMmsi;
   
   // Fetch AIS position preview when IMO or MMSI is provided
   const { data: position, isLoading: positionLoading, error: positionError } = useQuery({
@@ -35,7 +37,7 @@ function VesselForm({ onClose, vessel = null }) {
         lon: data.lon || data.Lon || data.longitude || data.Longitude,
       };
     },
-    enabled: hasIdentifier && (imoNumber.length >= 7 || (formData.mmsi && formData.mmsi.length >= 9)),
+    enabled: shouldFetchPosition, // Always a boolean
     retry: 1,
     retryDelay: 1000,
   });
@@ -126,7 +128,7 @@ function VesselForm({ onClose, vessel = null }) {
           </div>
 
           {/* AIS Position Map Preview */}
-          {hasIdentifier && (
+          {((imoNumber && imoNumber.length > 0) || (formData.mmsi && formData.mmsi.length > 0)) && (
             <div className={styles.field}>
               <label>Vessel Position (AIS)</label>
               {positionLoading ? (
