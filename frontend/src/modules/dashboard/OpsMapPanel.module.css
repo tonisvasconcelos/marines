@@ -1,21 +1,15 @@
 .mapPanel {
   position: relative;
   width: 100%;
-  /* Use min-height instead of height: 100% to allow natural expansion */
-  min-height: 500px;
+  height: 100%;
   background-color: var(--bg-primary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  /* Remove border and border-radius for full-screen map */
   overflow: hidden;
-  /* Keep overflow: hidden here for the map container itself */
 }
 
 .map {
   width: 100%;
-  /* Use min-height and allow height to grow naturally */
-  min-height: 500px;
   height: 100%;
-  /* Height: 100% works here because parent has min-height */
 }
 
 .vesselInfo {

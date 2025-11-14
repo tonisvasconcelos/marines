@@ -1,6 +1,11 @@
 .panel {
   padding: 0;
   overflow: hidden;
+  background-color: rgba(30, 41, 59, 0.85); /* Semi-transparent dark background */
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
 }
 
 .header {

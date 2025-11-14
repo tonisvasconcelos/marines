@@ -52,32 +52,32 @@ function Dashboard() {
 
   return (
     <div className={styles.dashboard}>
-      {/* Tactical Header */}
-      <div className={styles.header}>
-        <div>
-          <h1 className={styles.title}>{t('dashboard.operationsCenter')}</h1>
-          <p className={styles.subtitle}>{t('dashboard.maritimeAwareness')}</p>
-        </div>
-        <div className={styles.statusIndicator}>
-          <span className={styles.statusDot}></span>
-          <span>{t('dashboard.live')}</span>
-        </div>
+      {/* Full-screen Map Background */}
+      <div className={styles.mapBackground}>
+        <OpsMapPanel
+          vessels={activeVessels}
+          geofences={geofences}
+          opsSites={opsSites}
+          onVesselClick={handleVesselClick}
+        />
       </div>
 
-      {/* Mission-Critical KPIs */}
-      <OpsKpiBar stats={stats} />
-
-      {/* Main Tactical Layout */}
-      <div className={styles.tacticalLayout}>
-        {/* Full-width Strategic Map */}
-        <div className={styles.mapSection}>
-          <OpsMapPanel
-            vessels={activeVessels}
-            geofences={geofences}
-            opsSites={opsSites}
-            onVesselClick={handleVesselClick}
-          />
+      {/* Overlay Content */}
+      <div className={styles.overlayContent}>
+        {/* Tactical Header */}
+        <div className={styles.header}>
+          <div>
+            <h1 className={styles.title}>{t('dashboard.operationsCenter')}</h1>
+            <p className={styles.subtitle}>{t('dashboard.maritimeAwareness')}</p>
+          </div>
+          <div className={styles.statusIndicator}>
+            <span className={styles.statusDot}></span>
+            <span>{t('dashboard.live')}</span>
+          </div>
         </div>
+
+        {/* Mission-Critical KPIs */}
+        <OpsKpiBar stats={stats} />
 
         {/* Right Sidebar: Stats + Events */}
         <div className={styles.sidebar}>
