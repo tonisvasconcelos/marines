@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useI18n } from '../../utils/useI18n';
@@ -47,15 +47,8 @@ function VesselDetail() {
     enabled: !!vessel && (!!vessel.imo || !!vessel.mmsi),
   });
 
-  if (isLoading) {
-    return <div className={styles.loading}>Loading...</div>;
-  }
-
-  if (!vessel) {
-    return <div className={styles.error}>{t('vessels.notFound')}</div>;
-  }
-
   // Calculate trip metrics from position history (AIS-driven)
+  // MUST be called before early returns to follow Rules of Hooks
   const tripMetrics = useMemo(() => {
     if (!positionHistory || positionHistory.length < 2) {
       return {
@@ -110,6 +103,15 @@ function VesselDetail() {
       tripTime: tripTimeMs > 0 ? { hours: tripTimeHours, mins: tripTimeMins } : null,
     };
   }, [positionHistory, position]);
+
+  // Early returns AFTER all hooks
+  if (isLoading) {
+    return <div className={styles.loading}>Loading...</div>;
+  }
+
+  if (!vessel) {
+    return <div className={styles.error}>{t('vessels.notFound')}</div>;
+  }
 
   // Extract AIS data from vessel (enriched by API)
   const aisVesselData = {
