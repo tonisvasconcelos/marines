@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { setLocale } from '../../utils/i18n';
+import { api } from '../../utils/api';
 
 const AuthContext = createContext(null);
 
@@ -32,35 +33,9 @@ export function AuthProvider({ children }) {
   const login = async (email, password) => {
     try {
       console.log('Attempting login with:', { email });
-      const url = '/api/auth/login';
-      console.log('Fetching URL:', url);
       
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-
-      console.log('Response status:', response.status, response.statusText);
-      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
-
-      if (!response.ok) {
-        let errorData;
-        try {
-          errorData = await response.json();
-        } catch {
-          try {
-            const text = await response.text();
-            errorData = { message: `HTTP ${response.status}: ${text}` };
-          } catch {
-            errorData = { message: `HTTP ${response.status}: Unknown error` };
-          }
-        }
-        console.error('Login failed:', errorData);
-        throw new Error(errorData.message || `HTTP ${response.status}`);
-      }
-
-      const data = await response.json();
+      // Use the API client which respects VITE_API_URL
+      const data = await api.post('/auth/login', { email, password });
       console.log('Login successful, received data:', { 
         hasToken: !!data.token, 
         hasUser: !!data.user, 
