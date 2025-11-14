@@ -1,0 +1,48 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 64px - 48px);
+  margin: -24px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px;
+  background-color: var(--white);
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.header h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--gray-900);
+}
+
+.legend {
+  display: flex;
+  gap: 24px;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--gray-700);
+}
+
+.legendDot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--white);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.map {
+  flex: 1;
+  width: 100%;
+}
+

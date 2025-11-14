@@ -1,0 +1,546 @@
+import { useEffect, useRef, useState } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useI18n } from '../../utils/useI18n';
+import { api } from '../../utils/api';
+import { FiEdit3, FiX, FiCheck } from 'react-icons/fi';
+import styles from './OpsMapPanel.module.css';
+import SaveAreaModal from './SaveAreaModal';
+
+// Custom vessel marker icons with status colors
+function createVesselIcon(status, size = 20) {
+  const colors = {
+    INBOUND: '#f59e0b', // Amber
+    IN_PORT: '#10b981', // Green
+    AT_SEA: '#3b82f6', // Blue
+    ANCHORED: '#8b5cf6', // Purple
+  };
+  
+  const color = colors[status] || '#64748b';
+  
+  return L.divIcon({
+    className: 'vessel-marker',
+    html: `
+      <div style="
+        width: ${size}px;
+        height: ${size}px;
+        background-color: ${color};
+        border: 2px solid white;
+        border-radius: 50%;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+      "></div>
+    `,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+  });
+}
+
+function OpsMapPanel({ vessels, geofences, opsSites, onVesselClick }) {
+  const { t } = useI18n();
+  const queryClient = useQueryClient();
+  const mapRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+  const markersRef = useRef({});
+  const polylinesRef = useRef({});
+  const polygonsRef = useRef({});
+  const circlesRef = useRef({});
+  const [selectedVessel, setSelectedVessel] = useState(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [drawingPoints, setDrawingPoints] = useState([]);
+  const [drawingPolygon, setDrawingPolygon] = useState(null);
+  const [drawingPolyline, setDrawingPolyline] = useState(null);
+  const [drawingMarkers, setDrawingMarkers] = useState([]);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [selectedSiteIds, setSelectedSiteIds] = useState(new Set());
+  const mapClickHandlerRef = useRef(null);
+  const hasUserInteractedRef = useRef(false); // Track if user has manually adjusted map
+  const initialBoundsSetRef = useRef(false); // Track if initial bounds have been set
+
+  // Initialize map
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    if (!mapInstanceRef.current) {
+      mapInstanceRef.current = L.map(mapRef.current, {
+        zoomControl: true,
+        attributionControl: true,
+      }).setView([-22.9068, -43.1729], 6);
+
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '© OpenStreetMap contributors © CARTO',
+        maxZoom: 19,
+      }).addTo(mapInstanceRef.current);
+
+      const map = mapInstanceRef.current;
+
+      // Track user interactions (zoom, pan, drag)
+      map.on('zoomstart', () => {
+        hasUserInteractedRef.current = true;
+      });
+
+      map.on('dragstart', () => {
+        hasUserInteractedRef.current = true;
+      });
+
+      map.on('moveend', () => {
+        // Only mark as interacted if it wasn't a programmatic move
+        if (!initialBoundsSetRef.current) {
+          hasUserInteractedRef.current = true;
+        }
+        initialBoundsSetRef.current = false;
+      });
+    }
+
+    return () => {
+      // Cleanup
+    };
+  }, []);
+
+  // Note: By default, no Ops Zones are visible. Users must manually select which ones to display.
+
+  // Update map layers
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+    const map = mapInstanceRef.current;
+
+    // Clear existing layers
+    Object.values(markersRef.current).forEach((marker) => map.removeLayer(marker));
+    Object.values(polylinesRef.current).forEach((polyline) => map.removeLayer(polyline));
+    Object.values(polygonsRef.current).forEach((polygon) => map.removeLayer(polygon));
+    Object.values(circlesRef.current).forEach((circle) => map.removeLayer(circle));
+    markersRef.current = {};
+    polylinesRef.current = {};
+    polygonsRef.current = {};
+    circlesRef.current = {};
+
+    // Always clean up drawing polyline when map layers update (unless actively drawing)
+    // This ensures no leftover lines persist on the map
+    if (drawingPolyline) {
+      try {
+        if (map.hasLayer(drawingPolyline)) {
+          map.removeLayer(drawingPolyline);
+        }
+      } catch (e) {
+        // Layer might already be removed, ignore error
+      }
+      // Only clear state if we're not actively drawing
+      if (!isDrawing) {
+        setDrawingPolyline(null);
+      }
+    }
+
+    // Filter geofences based on selected ops sites
+    // If no sites are selected, show nothing. Otherwise, only show selected sites.
+    const filteredGeofences = selectedSiteIds.size === 0 
+      ? [] 
+      : (geofences?.filter((geofence) => selectedSiteIds.has(geofence.id)) || []);
+
+    // Add geofences as polygons (if they have polygon data) or circles
+    if (filteredGeofences.length > 0) {
+      filteredGeofences.forEach((geofence) => {
+        if (geofence.polygon && geofence.polygon.length > 0) {
+          // Draw polygon geofence
+          const polygon = L.polygon(geofence.polygon.map(p => [p.lat, p.lon]), {
+            color: geofence.type === 'PORT' ? '#10b981' : 
+                   geofence.type === 'TERMINAL' ? '#3b82f6' :
+                   geofence.type === 'BERTH' ? '#f59e0b' : '#8b5cf6',
+            fillColor: geofence.type === 'PORT' ? '#10b981' : 
+                       geofence.type === 'TERMINAL' ? '#3b82f6' :
+                       geofence.type === 'BERTH' ? '#f59e0b' : '#8b5cf6',
+            fillOpacity: 0.15,
+            weight: 2,
+            opacity: 0.7,
+          }).addTo(map);
+          
+          polygon.bindTooltip(`${geofence.name} (${geofence.type})`, { permanent: false });
+          polygonsRef.current[geofence.id] = polygon;
+        } else if (geofence.center) {
+          // Draw circular geofence (fallback)
+          const circle = L.circle([geofence.center.lat, geofence.center.lon], {
+            radius: geofence.radius || 5000,
+            color: geofence.type === 'PORT' ? '#10b981' : 
+                   geofence.type === 'TERMINAL' ? '#3b82f6' :
+                   geofence.type === 'BERTH' ? '#f59e0b' : '#8b5cf6',
+            fillColor: geofence.type === 'PORT' ? '#10b981' : 
+                       geofence.type === 'TERMINAL' ? '#3b82f6' :
+                       geofence.type === 'BERTH' ? '#f59e0b' : '#8b5cf6',
+            fillOpacity: 0.1,
+            weight: 2,
+            opacity: 0.6,
+          }).addTo(map);
+          
+          circle.bindTooltip(`${geofence.name} (${geofence.type})`, { permanent: false });
+          circlesRef.current[geofence.id] = circle;
+        }
+      });
+    }
+
+    // Add vessel markers
+    if (vessels) {
+      const bounds = [];
+      
+      vessels.forEach((vessel) => {
+        if (!vessel.position || !vessel.position.lat || !vessel.position.lon) return;
+
+        const icon = createVesselIcon(vessel.status, 16);
+        const marker = L.marker([vessel.position.lat, vessel.position.lon], { icon })
+          .addTo(map);
+
+        const popupContent = `
+          <div style="min-width: 200px;">
+            <strong>${vessel.name}</strong><br/>
+            <small>${vessel.imo || 'N/A'}</small><br/>
+            Status: ${vessel.status}<br/>
+            ${vessel.position.sog ? `SOG: ${vessel.position.sog.toFixed(1)} kn<br/>` : ''}
+            ${vessel.position.cog ? `COG: ${vessel.position.cog.toFixed(0)}°<br/>` : ''}
+            ${vessel.portCall ? `<br/>Port: ${vessel.portCall.port?.name || 'N/A'}` : ''}
+          </div>
+        `;
+        marker.bindPopup(popupContent);
+
+        marker.on('click', () => {
+          setSelectedVessel(vessel);
+          if (onVesselClick) onVesselClick(vessel);
+        });
+
+        markersRef.current[vessel.id] = marker;
+        bounds.push([vessel.position.lat, vessel.position.lon]);
+      });
+
+      // Only auto-fit bounds on initial load, not after user has interacted with the map
+      if (bounds.length > 0 && !isDrawing && !hasUserInteractedRef.current) {
+        initialBoundsSetRef.current = true;
+        map.fitBounds(bounds, { padding: [50, 50] });
+      }
+    }
+  }, [vessels, geofences, selectedSiteIds, onVesselClick, isDrawing]);
+
+  // Handle drawing mode
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+    const map = mapInstanceRef.current;
+
+    if (isDrawing) {
+      // Enable drawing mode
+      map.dragging.disable();
+      map.doubleClickZoom.disable();
+      map.getContainer().style.cursor = 'crosshair';
+
+      // Handle map clicks for drawing
+      const handleMapClick = (e) => {
+        const { lat, lng } = e.latlng;
+        const newPoints = [...drawingPoints, { lat, lon: lng }];
+        setDrawingPoints(newPoints);
+
+        // Remove old markers and polyline
+        drawingMarkers.forEach(marker => map.removeLayer(marker));
+        if (drawingPolyline) {
+          map.removeLayer(drawingPolyline);
+        }
+        
+        // Add marker for new point
+        const newMarker = L.marker([lat, lng], {
+          icon: L.divIcon({
+            className: 'drawing-point',
+            html: '<div style="width: 12px; height: 12px; background-color: #3b82f6; border: 2px solid white; border-radius: 50%;"></div>',
+            iconSize: [12, 12],
+            iconAnchor: [6, 6],
+          }),
+        }).addTo(map);
+        
+        const updatedMarkers = [...drawingMarkers, newMarker];
+        setDrawingMarkers(updatedMarkers);
+        
+        // Add polyline connecting all points
+        if (newPoints.length > 1) {
+          const polyline = L.polyline(
+            newPoints.map(p => [p.lat, p.lon]),
+            { color: '#3b82f6', weight: 2, opacity: 0.8, dashArray: '5, 5' }
+          ).addTo(map);
+          setDrawingPolyline(polyline);
+        }
+      };
+
+      map.on('click', handleMapClick);
+      mapClickHandlerRef.current = handleMapClick;
+    } else {
+      // Disable drawing mode
+      map.dragging.enable();
+      map.doubleClickZoom.enable();
+      map.getContainer().style.cursor = '';
+
+      if (mapClickHandlerRef.current) {
+        map.off('click', mapClickHandlerRef.current);
+        mapClickHandlerRef.current = null;
+      }
+
+      // Clean up drawing
+      drawingMarkers.forEach(marker => map.removeLayer(marker));
+      setDrawingMarkers([]);
+      if (drawingPolyline) {
+        map.removeLayer(drawingPolyline);
+        setDrawingPolyline(null);
+      }
+      if (drawingPolygon) {
+        map.removeLayer(drawingPolygon);
+        setDrawingPolygon(null);
+      }
+      setDrawingPoints([]);
+    }
+
+    return () => {
+      if (mapClickHandlerRef.current) {
+        map.off('click', mapClickHandlerRef.current);
+      }
+    };
+  }, [isDrawing, drawingPoints, drawingPolyline, drawingPolygon, drawingMarkers]);
+
+  const handleStartDrawing = () => {
+    setIsDrawing(true);
+    setDrawingPoints([]);
+  };
+
+  const handleCancelDrawing = () => {
+    setIsDrawing(false);
+    setDrawingPoints([]);
+    if (mapInstanceRef.current) {
+      drawingMarkers.forEach(marker => mapInstanceRef.current.removeLayer(marker));
+      if (drawingPolyline) {
+        mapInstanceRef.current.removeLayer(drawingPolyline);
+      }
+      if (drawingPolygon) {
+        mapInstanceRef.current.removeLayer(drawingPolygon);
+      }
+    }
+    setDrawingMarkers([]);
+    setDrawingPolyline(null);
+    setDrawingPolygon(null);
+  };
+
+  const handleCompleteDrawing = () => {
+    if (drawingPoints.length < 3) {
+      alert('Please add at least 3 points to create an area');
+      return;
+    }
+
+    // Close the polygon by connecting last point to first
+    const closedPoints = [...drawingPoints, drawingPoints[0]];
+    
+    // Create polygon visualization
+    if (mapInstanceRef.current) {
+      drawingMarkers.forEach(marker => mapInstanceRef.current.removeLayer(marker));
+      if (drawingPolyline) {
+        mapInstanceRef.current.removeLayer(drawingPolyline);
+      }
+    }
+    setDrawingMarkers([]);
+    setDrawingPolyline(null);
+    
+    const polygon = L.polygon(
+      closedPoints.map(p => [p.lat, p.lon]),
+      { color: '#10b981', fillColor: '#10b981', fillOpacity: 0.2, weight: 2 }
+    ).addTo(mapInstanceRef.current);
+    
+    setDrawingPolygon(polygon);
+    setShowSaveModal(true);
+  };
+
+  const handleSaveArea = async (formData) => {
+    // Calculate center point from polygon
+    const centerLat = drawingPoints.reduce((sum, p) => sum + p.lat, 0) / drawingPoints.length;
+    const centerLon = drawingPoints.reduce((sum, p) => sum + p.lon, 0) / drawingPoints.length;
+
+    const opsSiteData = {
+      ...formData,
+      latitude: centerLat,
+      longitude: centerLon,
+      polygon: drawingPoints, // Store polygon coordinates
+    };
+
+    try {
+      await api.post('/ops-sites', opsSiteData);
+      queryClient.invalidateQueries(['opsSites']);
+      queryClient.invalidateQueries(['dashboard', 'geofences']);
+      
+      // Reset drawing state
+      setIsDrawing(false);
+      setDrawingPoints([]);
+      setDrawingMarkers([]);
+      setDrawingPolyline(null);
+      if (drawingPolygon && mapInstanceRef.current) {
+        mapInstanceRef.current.removeLayer(drawingPolygon);
+        setDrawingPolygon(null);
+      }
+      setShowSaveModal(false);
+    } catch (error) {
+      console.error('Failed to save ops site:', error);
+      alert('Failed to save area. Please try again.');
+    }
+  };
+
+  const handleCancelSave = () => {
+    setShowSaveModal(false);
+    if (mapInstanceRef.current) {
+      if (drawingPolygon) {
+        mapInstanceRef.current.removeLayer(drawingPolygon);
+        setDrawingPolygon(null);
+      }
+    }
+    setIsDrawing(false);
+    setDrawingPoints([]);
+    setDrawingMarkers([]);
+    setDrawingPolyline(null);
+  };
+
+  // Note: Geofence monitoring is handled on the backend
+  // The backend checks vessel positions against geofences and generates events
+
+  const handleSiteToggle = (siteId) => {
+    const newSelected = new Set(selectedSiteIds);
+    if (newSelected.has(siteId)) {
+      newSelected.delete(siteId);
+    } else {
+      newSelected.add(siteId);
+    }
+    setSelectedSiteIds(newSelected);
+  };
+
+  const handleSelectAll = () => {
+    if (opsSites) {
+      setSelectedSiteIds(new Set(opsSites.map(site => site.id)));
+    }
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedSiteIds(new Set());
+  };
+
+  return (
+    <div className={styles.mapPanel}>
+      <div ref={mapRef} className={styles.map} />
+      
+      {/* Ops Sites Filter */}
+      {opsSites && opsSites.length > 0 && (
+        <div className={styles.filterPanel}>
+          <button
+            className={styles.filterToggle}
+            onClick={() => setShowFilters(!showFilters)}
+            title="Filter Ops Sites"
+          >
+            <span>Filter Ops Sites</span>
+            <span className={styles.filterCount}>
+              {selectedSiteIds.size > 0 ? `${selectedSiteIds.size}/${opsSites.length}` : '0'}
+            </span>
+          </button>
+          
+          {showFilters && (
+            <div className={styles.filterDropdown}>
+              <div className={styles.filterHeader}>
+                <span>Select Ops Sites to Display</span>
+                <div className={styles.filterActions}>
+                  <button onClick={handleSelectAll} className={styles.filterActionBtn}>
+                    Select All
+                  </button>
+                  <button onClick={handleDeselectAll} className={styles.filterActionBtn}>
+                    Deselect All
+                  </button>
+                </div>
+              </div>
+              <div className={styles.filterList}>
+                {opsSites.map((site) => (
+                  <label key={site.id} className={styles.filterItem}>
+                    <input
+                      type="checkbox"
+                      checked={selectedSiteIds.has(site.id)}
+                      onChange={() => handleSiteToggle(site.id)}
+                    />
+                    <span>{site.name}</span>
+                    <span className={styles.filterType}>{site.type}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      
+      {/* Drawing Controls */}
+      <div className={styles.mapControls}>
+        {!isDrawing ? (
+          <button 
+            className={styles.drawButton}
+            onClick={handleStartDrawing}
+            title="Draw Area"
+          >
+            <FiEdit3 size={18} />
+            <span>Draw Area</span>
+          </button>
+        ) : (
+          <>
+            <div className={styles.drawingInfo}>
+              <span>Click on map to add points ({drawingPoints.length} points)</span>
+            </div>
+            <button 
+              className={styles.completeButton}
+              onClick={handleCompleteDrawing}
+              disabled={drawingPoints.length < 3}
+              title="Complete Area"
+            >
+              <FiCheck size={18} />
+              <span>Complete</span>
+            </button>
+            <button 
+              className={styles.cancelButton}
+              onClick={handleCancelDrawing}
+              title="Cancel"
+            >
+              <FiX size={18} />
+              <span>Cancel</span>
+            </button>
+          </>
+        )}
+      </div>
+
+      {selectedVessel && (
+        <div className={styles.vesselInfo}>
+          <h4>{selectedVessel.name}</h4>
+          <div className={styles.infoRow}>
+            <span>Status:</span>
+            <span className={styles[selectedVessel.status.toLowerCase()]}>{selectedVessel.status}</span>
+          </div>
+          {selectedVessel.position?.sog && (
+            <div className={styles.infoRow}>
+              <span>SOG:</span>
+              <span>{selectedVessel.position.sog.toFixed(1)} kn</span>
+            </div>
+          )}
+          {selectedVessel.position?.cog && (
+            <div className={styles.infoRow}>
+              <span>COG:</span>
+              <span>{selectedVessel.position.cog.toFixed(0)}°</span>
+            </div>
+          )}
+          <button 
+            className={styles.closeButton}
+            onClick={() => setSelectedVessel(null)}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      {showSaveModal && (
+        <SaveAreaModal
+          points={drawingPoints}
+          onSave={handleSaveArea}
+          onCancel={handleCancelSave}
+        />
+      )}
+    </div>
+  );
+}
+
+
+export default OpsMapPanel;

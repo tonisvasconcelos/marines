@@ -1,0 +1,200 @@
+.dashboard {
+  width: 100%;
+  /* Allow dashboard to grow naturally instead of fixed height */
+  min-height: auto;
+  padding: 24px;
+  max-width: 100%;
+  /* Remove overflow: hidden to allow page scrolling */
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-primary);
+}
+
+/* Tactical Header */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid var(--border);
+}
+
+.title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 4px 0;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-family: 'Courier New', monospace;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 500;
+}
+
+.statusIndicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--success);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-family: 'Courier New', monospace;
+}
+
+.statusDot {
+  width: 8px;
+  height: 8px;
+  background-color: var(--success);
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Tactical Layout */
+.tacticalLayout {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 16px;
+  /* Remove flex: 1 and overflow: hidden to allow natural content flow */
+  min-height: 0;
+  /* Allow content to expand naturally */
+}
+
+.mapSection {
+  /* Use min-height instead of fixed height to allow natural expansion */
+  min-height: 500px;
+  /* Remove height: 100% to prevent clipping */
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  /* Remove overflow: hidden and max-height to allow natural content flow */
+  /* Content will expand naturally with the page */
+}
+
+.statsSection {
+  flex-shrink: 0;
+}
+
+.eventsSection {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  /* Allow events section to scroll internally if needed, but don't clip parent */
+  overflow-y: auto;
+}
+
+/* Responsive Design */
+@media (max-width: 1400px) {
+  .tacticalLayout {
+    grid-template-columns: 1fr 320px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .dashboard {
+    padding: 16px;
+  }
+
+  .tacticalLayout {
+    grid-template-columns: 1fr;
+    /* Remove fixed grid-template-rows to allow natural flow */
+    grid-template-rows: auto;
+  }
+
+  .mapSection {
+    /* Use min-height instead of fixed height for responsive behavior */
+    min-height: 500px;
+  }
+
+  .sidebar {
+    flex-direction: row;
+    overflow-x: auto;
+  }
+
+  .statsSection,
+  .eventsSection {
+    min-width: 300px;
+    flex: 0 0 300px;
+  }
+}
+
+@media (max-width: 768px) {
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .title {
+    font-size: 20px;
+  }
+
+  .tacticalLayout {
+    /* Remove fixed grid-template-rows to allow natural flow */
+    grid-template-rows: auto;
+  }
+
+  .mapSection {
+    /* Use min-height instead of fixed height for responsive behavior */
+    min-height: 400px;
+  }
+
+  .sidebar {
+    flex-direction: column;
+  }
+
+  .statsSection,
+  .eventsSection {
+    min-width: 100%;
+    flex: 1;
+  }
+}
+
+/* Loading States */
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.error {
+  padding: 20px;
+  background-color: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius);
+  color: var(--danger);
+  text-align: center;
+  margin: 20px 0;
+}

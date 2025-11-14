@@ -1,0 +1,149 @@
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.header h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--gray-900);
+  margin-bottom: 8px;
+}
+
+.header p {
+  font-size: 16px;
+  color: var(--gray-600);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gray-700);
+}
+
+.field input,
+.field select {
+  padding: 12px;
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius);
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.field input:focus,
+.field select:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.saveButton {
+  padding: 12px 24px;
+  background-color: var(--primary);
+  color: var(--white);
+  border: none;
+  border-radius: var(--radius);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  align-self: flex-start;
+}
+
+.saveButton:hover {
+  background-color: var(--primary-dark);
+}
+
+.table {
+  overflow-x: auto;
+  margin-bottom: 24px;
+}
+
+.table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.table th {
+  font-weight: 600;
+  color: var(--gray-700);
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.table td {
+  font-size: 14px;
+  color: var(--gray-900);
+}
+
+.role {
+  display: inline-block;
+  padding: 4px 12px;
+  background-color: var(--gray-100);
+  color: var(--gray-700);
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.actionButton {
+  padding: 6px 12px;
+  background: none;
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius);
+  color: var(--gray-700);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.actionButton:hover {
+  background-color: var(--gray-50);
+  border-color: var(--gray-400);
+}
+
+.newButton {
+  padding: 12px 24px;
+  background-color: var(--primary);
+  color: var(--white);
+  border: none;
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.newButton:hover {
+  background-color: var(--primary-dark);
+}
+
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: var(--gray-500);
+}
+
