@@ -12,6 +12,7 @@ import customersRoutes from './routes/customers.js';
 import agentsRoutes from './routes/agents.js';
 import teamsRoutes from './routes/teams.js';
 import { authenticateToken } from './middleware/auth.js';
+import { testConnection } from './db/connection.js';
 
 dotenv.config();
 
@@ -52,7 +53,24 @@ app.use('/api/customers', authenticateToken, customersRoutes);
 app.use('/api/agents', authenticateToken, agentsRoutes);
 app.use('/api/teams', authenticateToken, teamsRoutes);
 
+// Test database connection on startup
+if (process.env.DATABASE_URL) {
+  testConnection().then((connected) => {
+    if (connected) {
+      console.log('✅ Database connection established');
+    } else {
+      console.warn('⚠️  Database connection failed - continuing with mock data');
+    }
+  }).catch((error) => {
+    console.error('❌ Database connection error:', error.message);
+    console.warn('⚠️  Continuing with mock data - check your DATABASE_URL');
+  });
+} else {
+  console.warn('⚠️  DATABASE_URL not set - using mock data');
+}
+
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
 });
 

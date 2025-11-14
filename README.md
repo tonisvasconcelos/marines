@@ -47,7 +47,7 @@ This application requires environment variables for both frontend and backend. S
 - `PORT` - Server port (default: 3001)
 - `FRONTEND_URL` - Frontend URL for CORS (e.g., `https://yourdomain.com`)
 - `JWT_SECRET` - Secret key for JWT tokens (generate a strong random string)
-- `DATABASE_URL` - PostgreSQL connection string
+- `DATABASE_URL` - PostgreSQL connection string (see [Neon Setup](#neon-postgresql-setup) below)
 - `AIS_API_KEY` - AIS provider API key (optional)
 - `AIS_API_URL` - AIS provider API URL (optional)
 - `APP_BASE_URL` - Base URL for tenant-specific URLs
@@ -89,6 +89,57 @@ The backend is a separate Express.js application that should be deployed to a pl
 6. Deploy!
 
 **Important:** Update your frontend's `VITE_API_URL` environment variable to point to your deployed backend URL.
+
+### Neon PostgreSQL Setup
+
+This project is configured to use **Neon PostgreSQL** (serverless PostgreSQL). The backend includes a database connection module that works with Neon.
+
+#### Getting Your Neon Connection String
+
+1. **Log in to Neon:**
+   - Go to [neon.tech](https://neon.tech)
+   - Sign in to your account
+
+2. **Get Your Connection String:**
+   - Open your Neon project
+   - Go to the "Connection Details" section
+   - Copy the connection string (it looks like):
+     ```
+     postgresql://user:password@ep-xxx.us-east-1.aws.neon.tech/dbname?sslmode=require
+     ```
+
+3. **For Connection Pooling (Recommended for Production):**
+   - Neon provides a connection pooling endpoint
+   - Look for "Connection pooling" in your Neon dashboard
+   - Use the pooling connection string (usually has `-pooler` in the hostname)
+   - Example: `postgresql://user:password@ep-xxx-pooler.us-east-1.aws.neon.tech/dbname?sslmode=require`
+
+4. **Set in Environment Variables:**
+   - **Local development:** Add to `backend/.env`:
+     ```env
+     DATABASE_URL=postgresql://user:password@ep-xxx.us-east-1.aws.neon.tech/dbname?sslmode=require
+     ```
+   - **Production (Railway/Render/etc.):** Add `DATABASE_URL` as an environment variable in your platform
+
+#### Database Connection
+
+The backend automatically:
+- ✅ Tests the database connection on startup
+- ✅ Uses connection pooling for better performance
+- ✅ Falls back to mock data if database is unavailable (for development)
+- ✅ Handles SSL connections (required for Neon)
+
+#### Next Steps
+
+Once you have your `DATABASE_URL` set:
+1. The backend will connect to Neon on startup
+2. You'll see `✅ Database connection established` in the logs
+3. You can start migrating from mock data to PostgreSQL queries
+
+**Note:** The app currently uses mock data. To use the database, you'll need to:
+- Create database tables/schema
+- Replace mock data functions with PostgreSQL queries
+- See `backend/db/connection.js` for the database connection helper
 
 ## ✨ Features
 
@@ -244,7 +295,16 @@ This application uses a **JWT-based multi-tenant architecture**. Tenants are ide
    git push -u origin main
    ```
 
-### Step 2: Backend Deployment
+### Step 2: Neon PostgreSQL Setup
+
+1. **Set up Neon PostgreSQL:**
+   - [ ] Log in to [neon.tech](https://neon.tech)
+   - [ ] Create a new project (or use existing)
+   - [ ] Copy your connection string from "Connection Details"
+   - [ ] **Recommended:** Use the connection pooling endpoint for production
+   - [ ] Note your `DATABASE_URL` (you'll need it for backend deployment)
+
+### Step 3: Backend Deployment
 
 1. **Deploy backend to Railway/Render/etc:**
    - [ ] Create new project on your platform
@@ -254,12 +314,13 @@ This application uses a **JWT-based multi-tenant architecture**. Tenants are ide
      - [ ] `PORT=3001`
      - [ ] `FRONTEND_URL=https://your-app.vercel.app` (update after frontend deploy)
      - [ ] `JWT_SECRET=<generate-strong-random-string>`
-     - [ ] `DATABASE_URL=<your-postgresql-connection-string>`
+     - [ ] `DATABASE_URL=<your-neon-connection-string>` (from Step 2)
      - [ ] `AIS_API_KEY=<your-ais-key>` (optional)
      - [ ] `APP_BASE_URL=https://your-app.vercel.app`
    - [ ] Deploy and note the backend URL
+   - [ ] Check logs to verify: `✅ Database connection established`
 
-### Step 3: Frontend Deployment (Vercel)
+### Step 4: Frontend Deployment (Vercel)
 
 1. **Import project in Vercel:**
    - [ ] Go to [Vercel Dashboard](https://vercel.com/dashboard)
@@ -288,7 +349,7 @@ This application uses a **JWT-based multi-tenant architecture**. Tenants are ide
    - [ ] Update `FRONTEND_URL` environment variable to your Vercel URL
    - [ ] Restart backend if needed
 
-### Step 4: Post-Deployment
+### Step 5: Post-Deployment
 
 - [ ] Test login functionality
 - [ ] Verify API calls are working
