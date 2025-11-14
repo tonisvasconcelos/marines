@@ -188,6 +188,54 @@ function OpsMapPanel({ vessels, geofences, opsSites, onVesselClick }) {
         const marker = L.marker([vessel.position.lat, vessel.position.lon], { icon })
           .addTo(map);
 
+        // Create tooltip content for hover (shows on mouseover)
+        const tooltipContent = `
+          <div style="
+            min-width: 220px;
+            padding: 8px;
+            background: rgba(15, 23, 42, 0.95);
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            border-radius: 6px;
+            color: #f1f5f9;
+            font-size: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+          ">
+            <div style="font-weight: 600; font-size: 14px; margin-bottom: 8px; color: #60a5fa;">
+              ${vessel.name}
+            </div>
+            <div style="display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 11px;">
+              ${vessel.position.sog !== undefined ? `
+                <span style="color: #94a3b8;">Speed:</span>
+                <span style="color: #f1f5f9; font-weight: 500;">${vessel.position.sog.toFixed(1)} kn</span>
+              ` : ''}
+              ${vessel.position.cog !== undefined ? `
+                <span style="color: #94a3b8;">Course:</span>
+                <span style="color: #f1f5f9; font-weight: 500;">${vessel.position.cog.toFixed(0)}°</span>
+              ` : ''}
+              <span style="color: #94a3b8;">Lat:</span>
+              <span style="color: #f1f5f9; font-weight: 500;">${vessel.position.lat.toFixed(6)}</span>
+              <span style="color: #94a3b8;">Long:</span>
+              <span style="color: #f1f5f9; font-weight: 500;">${vessel.position.lon.toFixed(6)}</span>
+              ${vessel.portCall?.port?.name ? `
+                <span style="color: #94a3b8;">Port:</span>
+                <span style="color: #f1f5f9; font-weight: 500;">${vessel.portCall.port.name}</span>
+              ` : ''}
+              <span style="color: #94a3b8;">Status:</span>
+              <span style="color: #f1f5f9; font-weight: 500;">${vessel.status || 'N/A'}</span>
+            </div>
+          </div>
+        `;
+
+        // Bind tooltip for hover (permanent, shows on mouseover)
+        marker.bindTooltip(tooltipContent, {
+          permanent: false,
+          direction: 'top',
+          offset: [0, -10],
+          className: 'vessel-tooltip',
+          opacity: 1,
+        });
+
+        // Keep popup for click (more detailed info)
         const popupContent = `
           <div style="min-width: 200px;">
             <strong>${vessel.name}</strong><br/>

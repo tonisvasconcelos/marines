@@ -286,3 +286,23 @@
   letter-spacing: 0.5px;
 }
 
+/* Vessel Tooltip Styling */
+:global(.vessel-tooltip) {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+:global(.vessel-tooltip .leaflet-tooltip-content-wrapper) {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+:global(.vessel-tooltip .leaflet-tooltip-content) {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
