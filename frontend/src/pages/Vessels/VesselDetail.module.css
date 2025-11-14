@@ -4,116 +4,60 @@
   background-color: var(--bg-primary);
   color: var(--text-primary);
   padding: 0;
+  overflow-x: hidden;
 }
 
-/* Top Navigation Bar */
-.topNav {
+/* Strava-Style 3-Column Layout */
+.stravaLayout {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 24px;
-  background-color: rgba(30, 41, 59, 0.95);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--border);
-  position: sticky;
-  top: 64px;
-  z-index: 100;
-}
-
-.topNavLeft {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.vesselName {
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin: 0;
-  letter-spacing: 0.5px;
-}
-
-.vesselType {
-  font-size: 14px;
-  color: var(--text-tertiary);
-  margin: 0;
-}
-
-.topNavRight {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.navButton {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  background-color: rgba(30, 41, 59, 0.8);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text-primary);
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.navButton:hover {
-  background-color: var(--bg-hover);
-  border-color: var(--primary);
-}
-
-.dropdownArrow {
-  font-size: 10px;
-  margin-left: 4px;
-}
-
-.menuButton {
-  padding: 8px 12px;
-  background-color: rgba(30, 41, 59, 0.8);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text-primary);
-  font-size: 18px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.menuButton:hover {
-  background-color: var(--bg-hover);
-}
-
-/* Main Layout */
-.mainLayout {
-  display: flex;
+  flex-direction: row;
+  height: calc(100vh - 64px);
   gap: 0;
-  position: relative;
-  min-height: calc(100vh - 200px);
+  overflow: hidden;
 }
 
-/* Left Sidebar */
-.sidebar {
+/* Left Column - Vessel Profile */
+.leftColumn {
+  min-width: 320px;
+  max-width: 360px;
   width: 320px;
   flex-shrink: 0;
-  background-color: rgba(30, 41, 59, 0.95);
-  backdrop-filter: blur(10px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  background-color: var(--bg-primary);
   border-right: 1px solid var(--border);
   padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  overflow-y: auto;
-  max-height: calc(100vh - 200px);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.leftColumn::-webkit-scrollbar {
+  width: 6px;
+}
+
+.leftColumn::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.leftColumn::-webkit-scrollbar-thumb {
+  background-color: var(--border);
+  border-radius: 3px;
+}
+
+.profileCard {
+  background-color: rgba(30, 41, 59, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0;
+  overflow: hidden;
 }
 
 .photoSection {
   width: 100%;
   aspect-ratio: 4/3;
   background-color: rgba(15, 23, 42, 0.6);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  border-bottom: 1px solid var(--border);
   overflow: hidden;
   position: relative;
   display: flex;
@@ -142,10 +86,32 @@
   color: var(--text-secondary);
 }
 
+.identitySection {
+  padding: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.vesselNameProfile {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 6px 0;
+  letter-spacing: 0.3px;
+}
+
+.vesselTypeProfile {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
 .detailsList {
+  padding: 16px 20px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
 .detailItem {
@@ -153,8 +119,12 @@
   justify-content: space-between;
   align-items: center;
   padding: 10px 0;
-  border-bottom: 1px solid var(--border);
-  font-size: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 13px;
+}
+
+.detailItem:last-child {
+  border-bottom: none;
 }
 
 .detailLabel {
@@ -175,6 +145,7 @@
   gap: 6px;
   color: var(--text-primary);
   font-weight: 600;
+  text-align: right;
 }
 
 .flagIcon {
@@ -182,357 +153,265 @@
   line-height: 1;
 }
 
-/* Main Content Area */
-.mainContent {
+/* Center Column - Activity Header + Metrics + Map */
+.centerColumn {
   flex: 1;
-  position: relative;
-  min-height: 600px;
   display: flex;
   flex-direction: column;
-}
-
-.mapBackground {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 1;
-}
-
-.mapBackground > div {
-  width: 100%;
-  height: 100%;
-}
-
-.overlayContent {
-  position: relative;
-  z-index: 10;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 20px;
-  pointer-events: none;
-}
-
-.overlayContent > * {
-  pointer-events: auto;
-}
-
-/* Trip Summary Bar */
-.tripSummary {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px;
-  background-color: rgba(30, 41, 59, 0.95);
-  backdrop-filter: blur(10px);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  gap: 20px;
-}
-
-.tripOrigin,
-.tripDestination {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  flex: 1;
-}
-
-.portInfo {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.portName {
-  color: var(--primary);
-}
-
-.portCode {
-  font-size: 12px;
-  color: var(--text-tertiary);
-  font-weight: 500;
-}
-
-.tripLabel {
-  font-size: 11px;
-  color: var(--text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-weight: 600;
-}
-
-.tripTime {
-  font-size: 14px;
-  color: var(--text-primary);
-  font-weight: 500;
-}
-
-.timeAgo {
-  font-size: 12px;
-  color: var(--text-tertiary);
-  margin-top: 4px;
-}
-
-/* KPIs Grid */
-.kpisGrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  padding: 16px 20px;
-  background-color: rgba(30, 41, 59, 0.95);
-  backdrop-filter: blur(10px);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-}
-
-.kpiColumn {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.kpiItem {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.kpiLabel {
-  font-size: 13px;
-  color: var(--text-secondary);
-  font-weight: 500;
-}
-
-.kpiValue {
-  font-size: 14px;
-  color: var(--text-primary);
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.kpiIcon {
-  font-size: 12px;
-  color: var(--text-tertiary);
-}
-
-.infoIcon {
-  font-size: 12px;
-  color: var(--primary);
-  cursor: help;
-}
-
-/* Right Panel - Situational Awareness */
-.rightPanel {
-  position: absolute;
-  right: 20px;
-  top: 20px;
-  width: 320px;
-  max-height: calc(100vh - 300px);
-  z-index: 20;
-}
-
-.situationalPanel {
-  background-color: rgba(30, 41, 59, 0.95);
-  backdrop-filter: blur(10px);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0;
+  min-width: 0;
   overflow: hidden;
-}
-
-.panelHeader {
-  padding: 12px 16px;
-  background-color: rgba(15, 23, 42, 0.8);
-  border-bottom: 1px solid var(--border);
-}
-
-.panelHeader h3 {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text-primary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin: 0;
-}
-
-.panelContent {
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.situationalItem {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.situationalLabel {
-  font-size: 12px;
-  color: var(--text-secondary);
-  font-weight: 500;
-}
-
-.situationalValue {
-  font-size: 13px;
-  color: var(--text-primary);
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-/* Tables Section */
-.tablesSection {
-  padding: 24px;
   background-color: var(--bg-primary);
 }
 
-.tableGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-  gap: 20px;
-}
-
-.tableCard {
-  background-color: rgba(30, 41, 59, 0.95);
-  backdrop-filter: blur(10px);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0;
-  overflow: hidden;
-}
-
-.tableHeader {
+/* Strava-Style Activity Header */
+.activityHeader {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
-  background-color: rgba(15, 23, 42, 0.8);
+  padding: 20px 24px;
+  background-color: rgba(30, 41, 59, 0.95);
+  backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  gap: 16px;
 }
 
-.tableHeader h3 {
-  font-size: 14px;
+.headerLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.activityTitle {
+  font-size: 28px;
   font-weight: 700;
   color: var(--text-primary);
+  margin: 0;
+  letter-spacing: 0.3px;
+  line-height: 1.2;
+}
+
+.activitySubtitle {
+  font-size: 14px;
+  color: var(--text-tertiary);
   margin: 0;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
-.tableWrapper {
-  padding: 16px;
-  max-height: 500px;
-  overflow-y: auto;
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
-.dataTable {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-
-.dataTable thead {
-  background-color: transparent;
-}
-
-.dataTable th {
-  padding: 10px 12px;
-  text-align: left;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-  letter-spacing: 0.5px;
-  border-bottom: 1px solid var(--border);
-}
-
-.dataTable td {
-  padding: 10px 12px;
-  color: var(--text-primary);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  font-size: 13px;
-}
-
-.dataTable tbody tr {
-  transition: background-color 0.2s;
-}
-
-.dataTable tbody tr:hover {
-  background-color: rgba(255, 255, 255, 0.05);
-}
-
-.eventRow {
-  cursor: pointer;
-}
-
-.portLink {
-  color: var(--primary);
-  cursor: pointer;
-  text-decoration: none;
-}
-
-.portLink:hover {
-  text-decoration: underline;
-}
-
-.expandIcon {
-  color: var(--primary);
-  margin-right: 8px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.eventIcon {
-  margin-right: 8px;
-  font-size: 16px;
-}
-
-.showMoreButton {
-  margin-top: 16px;
-  padding: 10px 20px;
-  background-color: var(--primary);
-  color: white;
-  border: none;
+.actionButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background-color: rgba(30, 41, 59, 0.8);
+  border: 1px solid var(--border);
   border-radius: 6px;
-  font-size: 14px;
-  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
-  width: 100%;
+  white-space: nowrap;
 }
 
-.showMoreButton:hover {
-  background-color: var(--primary-dark);
+.actionButton:hover {
+  background-color: var(--bg-hover);
+  border-color: var(--primary);
   transform: translateY(-1px);
+}
+
+.actionButton span {
+  display: inline-block;
+}
+
+.dropdownArrow {
+  font-size: 10px;
+  margin-left: 4px;
+  opacity: 0.7;
+}
+
+.menuButton {
+  padding: 8px 12px;
+  background-color: rgba(30, 41, 59, 0.8);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 18px;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.menuButton:hover {
+  background-color: var(--bg-hover);
+}
+
+/* Strava-Style Metrics Grid */
+.metricsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 16px;
+  padding: 20px 24px;
+  background-color: rgba(30, 41, 59, 0.95);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.metricCard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  background-color: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.metricCard:hover {
+  background-color: rgba(15, 23, 42, 0.8);
+  border-color: var(--primary);
+  transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
-.emptyTable {
-  padding: 40px;
-  text-align: center;
+.metricLabel {
+  font-size: 11px;
   color: var(--text-tertiary);
-  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
 }
 
+.metricValue {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.metricSubValue {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+/* Map Section - Fills remaining space */
+.mapSection {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  background-color: var(--bg-primary);
+  overflow: hidden;
+}
+
+.mapSection > div {
+  width: 100%;
+  height: 100%;
+}
+
+/* Right Column - AIS Telemetry Panel */
+.rightColumn {
+  min-width: 320px;
+  max-width: 360px;
+  width: 320px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background-color: var(--bg-primary);
+  border-left: 1px solid var(--border);
+  padding: 20px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.rightColumn::-webkit-scrollbar {
+  width: 6px;
+}
+
+.rightColumn::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.rightColumn::-webkit-scrollbar-thumb {
+  background-color: var(--border);
+  border-radius: 3px;
+}
+
+.telemetryCard {
+  background-color: rgba(30, 41, 59, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0;
+  overflow: hidden;
+}
+
+.telemetryHeader {
+  padding: 16px 20px;
+  background-color: rgba(15, 23, 42, 0.8);
+  border-bottom: 1px solid var(--border);
+}
+
+.telemetryHeader h3 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0;
+}
+
+.telemetryContent {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.telemetryItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.telemetryItem:last-child {
+  border-bottom: none;
+}
+
+.telemetryLabel {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.telemetryValue {
+  font-size: 13px;
+  color: var(--text-primary);
+  font-weight: 600;
+  text-align: right;
+}
+
+/* Loading and Error States */
 .loading,
 .error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 64px);
   padding: 40px;
   text-align: center;
   color: var(--text-secondary);
@@ -541,65 +420,104 @@
 
 /* Responsive Design */
 @media (max-width: 1400px) {
-  .sidebar {
-    width: 280px;
+  .leftColumn,
+  .rightColumn {
+    width: 300px;
+    min-width: 300px;
+    max-width: 300px;
   }
 
-  .rightPanel {
-    width: 280px;
-  }
-
-  .tableGrid {
-    grid-template-columns: 1fr;
+  .metricsGrid {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 12px;
+    padding: 16px 20px;
   }
 }
 
 @media (max-width: 1024px) {
-  .mainLayout {
+  .stravaLayout {
     flex-direction: column;
+    height: auto;
+    min-height: calc(100vh - 64px);
   }
 
-  .sidebar {
+  .leftColumn,
+  .rightColumn {
     width: 100%;
+    min-width: 100%;
+    max-width: 100%;
     max-height: 400px;
+    border-right: none;
+    border-left: none;
+    border-bottom: 1px solid var(--border);
   }
 
-  .rightPanel {
-    position: relative;
-    right: auto;
-    top: auto;
-    width: 100%;
-    margin-top: 16px;
+  .centerColumn {
+    flex: 1;
+    min-height: 600px;
   }
 
-  .kpisGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .tripSummary {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-}
-
-@media (max-width: 768px) {
-  .topNav {
+  .activityHeader {
     flex-direction: column;
     align-items: flex-start;
     gap: 12px;
   }
 
-  .topNavRight {
+  .headerRight {
     width: 100%;
-    flex-wrap: wrap;
+    justify-content: flex-start;
   }
 
-  .navButton {
-    flex: 1;
-    min-width: 120px;
+  .metricsGrid {
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 10px;
+    padding: 16px;
   }
 
-  .vesselName {
-    font-size: 20px;
+  .metricCard {
+    padding: 10px;
+  }
+
+  .metricValue {
+    font-size: 18px;
+  }
+}
+
+@media (max-width: 768px) {
+  .activityTitle {
+    font-size: 22px;
+  }
+
+  .actionButton {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  .actionButton span:not(.dropdownArrow) {
+    display: none;
+  }
+
+  .metricsGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .metricValue {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .leftColumn,
+  .rightColumn {
+    padding: 12px;
+  }
+
+  .activityHeader {
+    padding: 16px;
+  }
+
+  .metricsGrid {
+    grid-template-columns: 1fr;
+    padding: 12px;
   }
 }

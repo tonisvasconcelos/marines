@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useI18n } from '../../utils/useI18n';
 import { api } from '../../utils/api';
 import Card from '../../components/ui/Card';
@@ -13,17 +13,13 @@ function VesselDetail() {
   const navigate = useNavigate();
   const { t } = useI18n();
 
+  // Fetch vessel data (includes AIS enrichment)
   const { data: vessel, isLoading } = useQuery({
     queryKey: ['vessel', id],
     queryFn: () => api.get(`/vessels/${id}`),
   });
 
-  const { data: portCalls } = useQuery({
-    queryKey: ['vessel', id, 'portCalls'],
-    queryFn: () => api.get(`/port-calls?vesselId=${id}&sort=eta:desc&limit=10`),
-    enabled: !!vessel,
-  });
-
+  // Fetch AIS position data
   const { data: position, isLoading: positionLoading } = useQuery({
     queryKey: ['vessel', id, 'position'],
     queryFn: async () => {
@@ -36,7 +32,7 @@ function VesselDetail() {
         };
       } catch (error) {
         console.error('Failed to fetch vessel position:', error);
-        throw error;
+        return null;
       }
     },
     enabled: !!vessel && (!!vessel.imo || !!vessel.mmsi),
@@ -44,15 +40,11 @@ function VesselDetail() {
     retry: 1,
   });
 
-  // Get events for this vessel
-  const { data: events } = useQuery({
-    queryKey: ['vessel', id, 'events'],
-    queryFn: () => api.get(`/dashboard/events`),
-    enabled: !!vessel,
-    select: (data) => {
-      // Filter events for this vessel
-      return data?.filter(event => event.vesselId === id) || [];
-    },
+  // Fetch position history for trip calculations
+  const { data: positionHistory } = useQuery({
+    queryKey: ['vessel', id, 'position-history'],
+    queryFn: () => api.get(`/vessels/${id}/position-history?limit=1000`),
+    enabled: !!vessel && (!!vessel.imo || !!vessel.mmsi),
   });
 
   if (isLoading) {
@@ -63,241 +55,305 @@ function VesselDetail() {
     return <div className={styles.error}>{t('vessels.notFound')}</div>;
   }
 
-  // Calculate trip summary from latest port call
-  const latestPortCall = portCalls?.[0];
-  const tripSummary = latestPortCall ? {
-    origin: latestPortCall.port?.name || 'Unknown',
-    originCode: latestPortCall.port?.unlocode || '',
-    originCountry: latestPortCall.port?.countryCode || '',
-    atd: latestPortCall.etd || latestPortCall.atd,
-    destination: latestPortCall.port?.name || 'Unknown',
-    destinationCode: latestPortCall.port?.unlocode || '',
-    destinationCountry: latestPortCall.port?.countryCode || '',
-    ata: latestPortCall.eta || latestPortCall.ata,
-  } : null;
+  // Calculate trip metrics from position history (AIS-driven)
+  const tripMetrics = useMemo(() => {
+    if (!positionHistory || positionHistory.length < 2) {
+      return {
+        tripDistance: null,
+        avgSpeed: position?.sog || null,
+        maxSpeed: position?.sog || null,
+        tripTime: null,
+      };
+    }
 
-  // Calculate trip stats from position history
-  const tripStats = position ? {
-    tripTime: '8 h, 53 mins', // Will be calculated from position history
-    tripDistance: '6.96 nm',
-    avgSpeed: position.sog ? `${position.sog.toFixed(1)}` : '0',
-    maxSpeed: '7.2',
-    draught: '4.8 m',
-    avgWind: '5 knots',
-    maxWind: '7.8 knots',
-    minTemp: '21°C / 69.8°F',
-    maxTemp: '28.8°C / 83.84°F',
-    positionReceived: '3 m ago',
-  } : null;
+    // Sort by timestamp
+    const sorted = [...positionHistory].sort(
+      (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
+    );
 
-  // Format vessel size if available
-  const vesselSize = vessel.length && vessel.width 
-    ? `${vessel.length} x ${vessel.width} m`
-    : vessel.size || '---';
+    // Calculate total distance (nautical miles)
+    let totalDistance = 0;
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = sorted[i - 1];
+      const curr = sorted[i];
+      if (prev.lat && prev.lon && curr.lat && curr.lon) {
+        const dist = calculateDistance(
+          prev.lat || prev.Lat,
+          prev.lon || prev.Lon,
+          curr.lat || curr.Lat,
+          curr.lon || curr.Lon
+        );
+        totalDistance += dist;
+      }
+    }
+
+    // Calculate speeds
+    const speeds = sorted
+      .map(p => p.sog || p.speed)
+      .filter(s => s != null && s > 0);
+    const avgSpeed = speeds.length > 0
+      ? speeds.reduce((a, b) => a + b, 0) / speeds.length
+      : null;
+    const maxSpeed = speeds.length > 0 ? Math.max(...speeds) : null;
+
+    // Calculate trip time
+    const startTime = new Date(sorted[0].timestamp);
+    const endTime = new Date(sorted[sorted.length - 1].timestamp);
+    const tripTimeMs = endTime - startTime;
+    const tripTimeHours = Math.floor(tripTimeMs / (1000 * 60 * 60));
+    const tripTimeMins = Math.floor((tripTimeMs % (1000 * 60 * 60)) / (1000 * 60));
+
+    return {
+      tripDistance: totalDistance > 0 ? totalDistance : null,
+      avgSpeed,
+      maxSpeed,
+      tripTime: tripTimeMs > 0 ? { hours: tripTimeHours, mins: tripTimeMins } : null,
+    };
+  }, [positionHistory, position]);
+
+  // Extract AIS data from vessel (enriched by API)
+  const aisVesselData = {
+    name: vessel.name || '---',
+    type: vessel.type || vessel.ship_type || vessel.vessel_type || '---',
+    imo: vessel.imo?.replace(/^IMO/i, '') || '---',
+    mmsi: vessel.mmsi || '---',
+    flag: vessel.flag || vessel.flag_code || '---',
+    callSign: vessel.callSign || vessel.callsign || vessel.call_sign || '---',
+    length: vessel.length || null,
+    width: vessel.width || vessel.beam || null,
+    size: vessel.length && vessel.width 
+      ? `${vessel.length} x ${vessel.width} m`
+      : vessel.size || '---',
+    grossTonnage: vessel.grossTonnage || vessel.gt || vessel.gross_tonnage || null,
+    deadweightTonnage: vessel.deadweightTonnage || vessel.dwt || vessel.deadweight_tonnage || null,
+    buildYear: vessel.buildYear || vessel.build || vessel.build_year || null,
+    draught: vessel.draught || vessel.draft || position?.draught || position?.draft || null,
+  };
+
+  // Extract AIS position data
+  const aisPositionData = {
+    latitude: position?.lat || position?.Lat || position?.latitude || position?.Latitude || null,
+    longitude: position?.lon || position?.Lon || position?.longitude || position?.Longitude || null,
+    speed: position?.sog || position?.speed || position?.speedOverGround || null,
+    course: position?.cog || position?.course || position?.courseOverGround || null,
+    heading: position?.heading || null,
+    navStatus: position?.navStatus || position?.status || position?.nav_status || null,
+    timestamp: position?.timestamp || position?.last_position_time || null,
+    source: position?.source || 'AIS',
+    station: position?.station || (position?.source === 'myshiptracking' ? 'T-AIS' : 'AIS'),
+    area: position?.area || position?.region || null,
+  };
+
+  // Format environmental data from AIS (if available)
+  const environmentalData = {
+    wind: {
+      avg: position?.wind?.avg || position?.wind_avg || null,
+      max: position?.wind?.max || position?.wind_max || position?.wind?.speed || null,
+      min: position?.wind?.min || position?.wind_min || null,
+    },
+    temperature: {
+      avg: position?.temperature || position?.temp || null,
+      max: position?.temperature_max || position?.temp_max || null,
+      min: position?.temperature_min || position?.temp_min || null,
+    },
+    waterTemp: position?.water_temperature || position?.water_temp || null,
+  };
 
   return (
     <div className={styles.container}>
-      {/* Top Navigation Bar */}
-      <div className={styles.topNav}>
-        <div className={styles.topNavLeft}>
-          <h1 className={styles.vesselName}>{vessel.name}</h1>
-          <p className={styles.vesselType}>{vessel.type || 'Other Type'}</p>
-        </div>
-        <div className={styles.topNavRight}>
-          <button className={styles.navButton}>
-            <FiMap size={18} />
-            <span>Show on Live Map</span>
-          </button>
-          <button className={styles.navButton}>
-            <FiAlertCircle size={18} />
-            <span>Alerts</span>
-          </button>
-          <button className={styles.navButton}>
-            <FiPlus size={18} />
-            <span>Add to fleet</span>
-            <span className={styles.dropdownArrow}>▼</span>
-          </button>
-          <button className={styles.menuButton}>☰</button>
-        </div>
-      </div>
+      {/* Strava-Style 3-Column Layout */}
+      <div className={styles.stravaLayout}>
+        {/* Left Column - Vessel Profile */}
+        <div className={styles.leftColumn}>
+          <Card className={styles.profileCard}>
+            {/* Vessel Photo */}
+            <div className={styles.photoSection}>
+              {vessel.imageUrl ? (
+                <img 
+                  src={vessel.imageUrl} 
+                  alt={aisVesselData.name}
+                  className={styles.vesselPhoto}
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    e.target.nextElementSibling.style.display = 'flex';
+                  }}
+                />
+              ) : null}
+              <div 
+                className={styles.photoPlaceholder}
+                style={{ display: vessel.imageUrl ? 'none' : 'flex' }}
+              >
+                <FiCamera size={24} />
+                <span>Upload Photo</span>
+              </div>
+            </div>
 
-      {/* Main Layout: Sidebar + Content */}
-      <div className={styles.mainLayout}>
-        {/* Left Sidebar - Vessel Details */}
-        <div className={styles.sidebar}>
-          {/* Upload Photo Section */}
-          <div className={styles.photoSection}>
-            {vessel.imageUrl ? (
-              <img 
-                src={vessel.imageUrl} 
-                alt={vessel.name}
-                className={styles.vesselPhoto}
-                onError={(e) => {
-                  e.target.style.display = 'none';
-                  e.target.nextElementSibling.style.display = 'flex';
-                }}
+            {/* Vessel Identity (AIS-driven) */}
+            <div className={styles.identitySection}>
+              <h2 className={styles.vesselNameProfile}>{aisVesselData.name}</h2>
+              <p className={styles.vesselTypeProfile}>{aisVesselData.type}</p>
+            </div>
+
+            {/* AIS Identity Details */}
+            <div className={styles.detailsList}>
+              <DetailItem 
+                label="Type" 
+                value={aisVesselData.type} 
+                icon={<FiSearch size={16} />}
               />
-            ) : null}
-            <div 
-              className={styles.photoPlaceholder}
-              style={{ display: vessel.imageUrl ? 'none' : 'flex' }}
-            >
-              <FiCamera size={24} />
-              <span>Upload Photo</span>
+              <DetailItem label="IMO" value={aisVesselData.imo} />
+              <DetailItem label="MMSI" value={aisVesselData.mmsi} />
+              <DetailItem 
+                label="Flag" 
+                value={aisVesselData.flag} 
+                flagCode={aisVesselData.flag}
+              />
+              <DetailItem label="Call Sign" value={aisVesselData.callSign} />
+              <DetailItem label="Size" value={aisVesselData.size} />
+              <DetailItem 
+                label="GT" 
+                value={aisVesselData.grossTonnage ? `${aisVesselData.grossTonnage}` : '---'} 
+              />
+              <DetailItem 
+                label="DWT" 
+                value={aisVesselData.deadweightTonnage ? `${aisVesselData.deadweightTonnage}` : '---'} 
+              />
+              <DetailItem 
+                label="Build" 
+                value={aisVesselData.buildYear ? `${aisVesselData.buildYear}` : '---'} 
+              />
+            </div>
+          </Card>
+        </div>
+
+        {/* Center Column - Activity Header + Metrics + Map */}
+        <div className={styles.centerColumn}>
+          {/* Strava-Style Activity Header */}
+          <div className={styles.activityHeader}>
+            <div className={styles.headerLeft}>
+              <h1 className={styles.activityTitle}>{aisVesselData.name}</h1>
+              <p className={styles.activitySubtitle}>{aisVesselData.type}</p>
+            </div>
+            <div className={styles.headerRight}>
+              <button className={styles.actionButton}>
+                <FiMap size={18} />
+                <span>Show on Live Map</span>
+              </button>
+              <button className={styles.actionButton}>
+                <FiAlertCircle size={18} />
+                <span>Alerts</span>
+              </button>
+              <button className={styles.actionButton}>
+                <FiPlus size={18} />
+                <span>Add to Fleet</span>
+                <span className={styles.dropdownArrow}>▼</span>
+              </button>
+              <button className={styles.menuButton}>☰</button>
             </div>
           </div>
 
-          {/* Vessel Details List */}
-          <div className={styles.detailsList}>
-            <DetailItem 
-              label="Type" 
-              value={vessel.type || '---'} 
-              icon={<FiSearch size={16} />}
+          {/* Strava-Style Metrics Grid */}
+          <div className={styles.metricsGrid}>
+            <MetricCard 
+              label="Trip Distance" 
+              value={tripMetrics.tripDistance ? `${tripMetrics.tripDistance.toFixed(2)} nm` : '---'}
             />
-            <DetailItem label="IMO" value={vessel.imo?.replace(/^IMO/i, '') || '---'} />
-            <DetailItem label="MMSI" value={vessel.mmsi || '---'} />
-            <DetailItem 
-              label="Flag" 
-              value={vessel.flag || '---'} 
-              flagCode={vessel.flag}
+            <MetricCard 
+              label="Average Speed" 
+              value={tripMetrics.avgSpeed ? `${tripMetrics.avgSpeed.toFixed(1)} kn` : (aisPositionData.speed ? `${aisPositionData.speed.toFixed(1)} kn` : '---')}
             />
-            <DetailItem label="Call Sign" value={vessel.callSign || '---'} />
-            <DetailItem label="Size" value={vesselSize} />
-            <DetailItem label="GT" value={vessel.grossTonnage || vessel.gt || '---'} />
-            <DetailItem label="DWT" value={vessel.deadweightTonnage || vessel.dwt || '---'} />
-            <DetailItem label="Build" value={vessel.buildYear || vessel.build || '---'} />
+            <MetricCard 
+              label="Max Speed" 
+              value={tripMetrics.maxSpeed ? `${tripMetrics.maxSpeed.toFixed(1)} kn` : (aisPositionData.speed ? `${aisPositionData.speed.toFixed(1)} kn` : '---')}
+            />
+            <MetricCard 
+              label="Draught" 
+              value={aisVesselData.draught ? `${aisVesselData.draught} m` : '---'}
+            />
+            <MetricCard 
+              label="Position Received" 
+              value={aisPositionData.timestamp ? formatTimeAgo(new Date(aisPositionData.timestamp)) : '---'}
+            />
+            <MetricCard 
+              label="Max Wind" 
+              value={environmentalData.wind.max ? `${environmentalData.wind.max} knots` : '---'}
+            />
+            <MetricCard 
+              label="Min Wind" 
+              value={environmentalData.wind.min ? `${environmentalData.wind.min} knots` : '---'}
+            />
+            <MetricCard 
+              label="Max Temp" 
+              value={environmentalData.temperature.max ? `${environmentalData.temperature.max}°C` : '---'}
+            />
+            <MetricCard 
+              label="Min Temp" 
+              value={environmentalData.temperature.min ? `${environmentalData.temperature.min}°C` : '---'}
+            />
           </div>
-        </div>
 
-        {/* Main Content Area */}
-        <div className={styles.mainContent}>
-          {/* Map Background */}
-          {position && position.lat && position.lon && (
-            <div className={styles.mapBackground}>
+          {/* Map Section - Fills remaining space */}
+          {aisPositionData.latitude && aisPositionData.longitude && (
+            <div className={styles.mapSection}>
               <MapView
-                position={position}
-                vesselName={vessel.name}
+                position={{
+                  lat: aisPositionData.latitude,
+                  lon: aisPositionData.longitude,
+                }}
+                vesselName={aisVesselData.name}
               />
             </div>
           )}
-
-          {/* Overlay Content */}
-          <div className={styles.overlayContent}>
-            {/* Trip Summary Bar */}
-            {tripSummary && (
-              <div className={styles.tripSummary}>
-                <div className={styles.tripOrigin}>
-                  <div className={styles.portInfo}>
-                    {tripSummary.originCountry && (
-                      <span className={styles.flagIcon}>{getFlagEmoji(tripSummary.originCountry)}</span>
-                    )}
-                    <span className={styles.portName}>{tripSummary.origin}</span>
-                    {tripSummary.originCode && (
-                      <span className={styles.portCode}>{tripSummary.originCode}</span>
-                    )}
-                  </div>
-                  <div className={styles.tripLabel}>ATD</div>
-                  <div className={styles.tripTime}>
-                    {tripSummary.atd 
-                      ? new Date(tripSummary.atd).toLocaleString('en-US', {
-                          year: 'numeric',
-                          month: '2-digit',
-                          day: '2-digit',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        }) + ' (LT)'
-                      : '---'}
-                  </div>
-                </div>
-                <div className={styles.tripDestination}>
-                  <div className={styles.portInfo}>
-                    {tripSummary.destinationCountry && (
-                      <span className={styles.flagIcon}>{getFlagEmoji(tripSummary.destinationCountry)}</span>
-                    )}
-                    <span className={styles.portName}>{tripSummary.destination}</span>
-                    {tripSummary.destinationCode && (
-                      <span className={styles.portCode}>{tripSummary.destinationCode}</span>
-                    )}
-                  </div>
-                  <div className={styles.tripLabel}>ATA</div>
-                  <div className={styles.tripTime}>
-                    {tripSummary.ata 
-                      ? new Date(tripSummary.ata).toLocaleString('en-US', {
-                          year: 'numeric',
-                          month: '2-digit',
-                          day: '2-digit',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        }) + ' (LT)'
-                      : '---'}
-                  </div>
-                  {tripSummary.ata && (
-                    <div className={styles.timeAgo}>
-                      {formatTimeAgo(new Date(tripSummary.ata))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* KPIs Grid */}
-            {tripStats && (
-              <div className={styles.kpisGrid}>
-                <div className={styles.kpiColumn}>
-                  <KpiItem label="Trip Time" value={tripStats.tripTime} />
-                  <KpiItem label="Trip Distance" value={tripStats.tripDistance} />
-                  <KpiItem label="AVG Speed" value={`${tripStats.avgSpeed} Knots`} />
-                  <KpiItem label="MAX Speed" value={`${tripStats.maxSpeed} Knots`} />
-                  <KpiItem label="Draught" value={tripStats.draught} />
-                </div>
-                <div className={styles.kpiColumn}>
-                  <KpiItem label="AVG Wind" value={tripStats.avgWind} />
-                  <KpiItem label="MAX Wind" value={tripStats.maxWind} />
-                  <KpiItem label="MIN Temp" value={tripStats.minTemp} />
-                  <KpiItem label="MAX Temp" value={tripStats.maxTemp} />
-                  <KpiItem 
-                    label="Position Received" 
-                    value={tripStats.positionReceived}
-                    icon={<span className={styles.infoIcon}>ⓘ</span>}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Right Panel - Situational Awareness */}
-            <div className={styles.rightPanel}>
-              <SituationalPanel vessel={vessel} position={position} />
-            </div>
-          </div>
         </div>
-      </div>
 
-      {/* Tables Section */}
-      <div className={styles.tablesSection}>
-        <div className={styles.tableGrid}>
-          {/* Last Port Calls Table */}
-          <Card className={styles.tableCard}>
-            <div className={styles.tableHeader}>
-              <h3>Last Port Calls</h3>
+        {/* Right Column - AIS Telemetry Panel */}
+        <div className={styles.rightColumn}>
+          <Card className={styles.telemetryCard}>
+            <div className={styles.telemetryHeader}>
+              <h3>AIS Telemetry</h3>
             </div>
-            <LastPortCallsTable portCalls={portCalls} />
-          </Card>
-
-          {/* Last Trips Table */}
-          <Card className={styles.tableCard}>
-            <div className={styles.tableHeader}>
-              <h3>Last Trips</h3>
-              <span className={styles.infoIcon}>ⓘ</span>
+            <div className={styles.telemetryContent}>
+              <TelemetryItem 
+                label="Longitude" 
+                value={aisPositionData.longitude ? aisPositionData.longitude.toFixed(5) : '---'}
+              />
+              <TelemetryItem 
+                label="Latitude" 
+                value={aisPositionData.latitude ? aisPositionData.latitude.toFixed(5) : '---'}
+              />
+              <TelemetryItem 
+                label="Speed" 
+                value={aisPositionData.speed ? `${aisPositionData.speed.toFixed(1)} kn` : '⚓'}
+              />
+              <TelemetryItem 
+                label="Course" 
+                value={aisPositionData.course ? `${aisPositionData.course.toFixed(0)}°` : '---'}
+              />
+              <TelemetryItem 
+                label="Heading" 
+                value={aisPositionData.heading ? `${aisPositionData.heading.toFixed(0)}°` : '---'}
+              />
+              <TelemetryItem 
+                label="Navigation Status" 
+                value={aisPositionData.navStatus || '---'}
+              />
+              <TelemetryItem 
+                label="Area" 
+                value={aisPositionData.area || '---'}
+              />
+              <TelemetryItem 
+                label="AIS Station" 
+                value={aisPositionData.station || '---'}
+              />
+              <TelemetryItem 
+                label="Last Position Received" 
+                value={aisPositionData.timestamp ? formatTimeAgo(new Date(aisPositionData.timestamp)) : '---'}
+              />
+              <TelemetryItem 
+                label="AIS Source" 
+                value={aisPositionData.source || '---'}
+              />
             </div>
-            <LastTripsTable portCalls={portCalls} />
-          </Card>
-
-          {/* Events Table */}
-          <Card className={styles.tableCard}>
-            <div className={styles.tableHeader}>
-              <h3>Events</h3>
-            </div>
-            <EventsTable events={events} navigate={navigate} />
           </Card>
         </div>
       </div>
@@ -314,341 +370,52 @@ function DetailItem({ label, value, icon, flagCode }) {
         {label}:
       </div>
       <div className={styles.detailValue}>
-        {flagCode && <span className={styles.flagIcon}>{getFlagEmoji(flagCode)}</span>}
+        {flagCode && flagCode !== '---' && (
+          <span className={styles.flagIcon}>{getFlagEmoji(flagCode)}</span>
+        )}
         {value}
       </div>
     </div>
   );
 }
 
-// Helper component for KPI items
-function KpiItem({ label, value, icon }) {
+// Strava-style metric card
+function MetricCard({ label, value, subValue }) {
   return (
-    <div className={styles.kpiItem}>
-      <span className={styles.kpiLabel}>{label}:</span>
-      <span className={styles.kpiValue}>
-        {value}
-        {icon && <span className={styles.kpiIcon}>{icon}</span>}
-      </span>
+    <div className={styles.metricCard}>
+      <div className={styles.metricLabel}>{label}</div>
+      <div className={styles.metricValue}>{value}</div>
+      {subValue && <div className={styles.metricSubValue}>{subValue}</div>}
     </div>
   );
 }
 
-// Situational Awareness Panel
-function SituationalPanel({ vessel, position }) {
+// Telemetry item
+function TelemetryItem({ label, value }) {
   return (
-    <Card className={styles.situationalPanel}>
-      <div className={styles.panelHeader}>
-        <h3>Situational Awareness</h3>
-      </div>
-      <div className={styles.panelContent}>
-        <div className={styles.situationalItem}>
-          <span className={styles.situationalLabel}>Longitude:</span>
-          <span className={styles.situationalValue}>
-            {position?.lon ? position.lon.toFixed(5) : '---'}
-          </span>
-        </div>
-        <div className={styles.situationalItem}>
-          <span className={styles.situationalLabel}>Latitude:</span>
-          <span className={styles.situationalValue}>
-            {position?.lat ? position.lat.toFixed(5) : '---'}
-          </span>
-        </div>
-        <div className={styles.situationalItem}>
-          <span className={styles.situationalLabel}>Status:</span>
-          <span className={styles.situationalValue}>
-            {position?.navStatus || position?.status || 'Moored'}
-          </span>
-        </div>
-        <div className={styles.situationalItem}>
-          <span className={styles.situationalLabel}>Speed:</span>
-          <span className={styles.situationalValue}>
-            {position?.sog ? `${position.sog.toFixed(1)} kn` : '⚓'}
-          </span>
-        </div>
-        <div className={styles.situationalItem}>
-          <span className={styles.situationalLabel}>Course:</span>
-          <span className={styles.situationalValue}>
-            {position?.cog ? `${position.cog.toFixed(0)}°` : '---'}
-          </span>
-        </div>
-        <div className={styles.situationalItem}>
-          <span className={styles.situationalLabel}>Area:</span>
-          <span className={styles.situationalValue}>South Atlantic Ocean</span>
-        </div>
-        <div className={styles.situationalItem}>
-          <span className={styles.situationalLabel}>Station:</span>
-          <span className={styles.situationalValue}>T-AIS</span>
-        </div>
-        <div className={styles.situationalItem}>
-          <span className={styles.situationalLabel}>Position Received:</span>
-          <span className={styles.situationalValue}>
-            {position?.timestamp ? formatTimeAgo(new Date(position.timestamp)) : '---'}
-            <span className={styles.infoIcon}>ⓘ</span>
-          </span>
-        </div>
-      </div>
-    </Card>
-  );
-}
-
-// Last Port Calls Table
-function LastPortCallsTable({ portCalls }) {
-  if (!portCalls || portCalls.length === 0) {
-    return <div className={styles.emptyTable}>No port calls available</div>;
-  }
-
-  const calculateTimeInPort = (arrival, departure) => {
-    if (!arrival || !departure) return '';
-    const diff = new Date(departure) - new Date(arrival);
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const days = Math.floor(hours / 24);
-    if (days > 0) return `${days} d`;
-    return `${hours} h`;
-  };
-
-  return (
-    <div className={styles.tableWrapper}>
-      <table className={styles.dataTable}>
-        <thead>
-          <tr>
-            <th>Port</th>
-            <th>Arrival</th>
-            <th>Departure</th>
-            <th>Time In Port</th>
-          </tr>
-        </thead>
-        <tbody>
-          {portCalls.map((pc) => (
-            <tr key={pc.id}>
-              <td>
-                {pc.port?.countryCode && (
-                  <span className={styles.flagIcon}>{getFlagEmoji(pc.port.countryCode)}</span>
-                )}
-                {pc.port?.name || pc.portId}
-              </td>
-              <td>
-                {pc.eta || pc.ata 
-                  ? new Date(pc.eta || pc.ata).toLocaleString('en-US', {
-                      year: 'numeric',
-                      month: '2-digit',
-                      day: '2-digit',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })
-                  : '---'}
-              </td>
-              <td>
-                {pc.etd || pc.atd
-                  ? new Date(pc.etd || pc.atd).toLocaleString('en-US', {
-                      year: 'numeric',
-                      month: '2-digit',
-                      day: '2-digit',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })
-                  : '---'}
-              </td>
-              <td>{calculateTimeInPort(pc.eta || pc.ata, pc.etd || pc.atd)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <button className={styles.showMoreButton}>Show More</button>
+    <div className={styles.telemetryItem}>
+      <span className={styles.telemetryLabel}>{label}:</span>
+      <span className={styles.telemetryValue}>{value}</span>
     </div>
   );
 }
 
-// Last Trips Table
-function LastTripsTable({ portCalls }) {
-  if (!portCalls || portCalls.length === 0) {
-    return <div className={styles.emptyTable}>No trips available</div>;
-  }
-
-  // Group port calls into trips (simplified - each port call is a trip)
-  const trips = portCalls.map((pc, index) => {
-    const nextPc = portCalls[index + 1];
-    return {
-      origin: pc.port?.name || 'Unknown',
-      originCode: pc.port?.countryCode,
-      departure: pc.etd || pc.atd,
-      destination: nextPc?.port?.name || pc.port?.name || 'Unknown',
-      destinationCode: nextPc?.port?.countryCode || pc.port?.countryCode,
-      arrival: nextPc?.eta || nextPc?.ata || pc.eta || pc.ata,
-      distance: '6.96 nm', // Will be calculated from position history
-    };
-  }).filter(trip => trip.departure);
-
-  return (
-    <div className={styles.tableWrapper}>
-      <table className={styles.dataTable}>
-        <thead>
-          <tr>
-            <th>Origin</th>
-            <th>Departure</th>
-            <th>Destination</th>
-            <th>Arrival</th>
-            <th>Distance</th>
-          </tr>
-        </thead>
-        <tbody>
-          {trips.map((trip, index) => (
-            <tr key={index}>
-              <td>
-                <span className={styles.expandIcon}>+</span>
-                {trip.originCode && (
-                  <span className={styles.flagIcon}>{getFlagEmoji(trip.originCode)}</span>
-                )}
-                <span className={styles.portLink}>{trip.origin}</span>
-              </td>
-              <td>
-                {trip.departure 
-                  ? new Date(trip.departure).toLocaleString('en-US', {
-                      year: 'numeric',
-                      month: '2-digit',
-                      day: '2-digit',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })
-                  : '---'}
-              </td>
-              <td>
-                {trip.destinationCode && (
-                  <span className={styles.flagIcon}>{getFlagEmoji(trip.destinationCode)}</span>
-                )}
-                <span className={styles.portLink}>{trip.destination}</span>
-              </td>
-              <td>
-                {trip.arrival
-                  ? new Date(trip.arrival).toLocaleString('en-US', {
-                      year: 'numeric',
-                      month: '2-digit',
-                      day: '2-digit',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })
-                  : '---'}
-              </td>
-              <td>{trip.distance}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <button className={styles.showMoreButton}>Show More</button>
-    </div>
-  );
-}
-
-// Events Table
-function EventsTable({ events, navigate }) {
-  if (!events || events.length === 0) {
-    return <div className={styles.emptyTable}>No events available</div>;
-  }
-
-  const getEventIcon = (type) => {
-    switch (type) {
-      case 'AIS_UPDATE':
-      case 'IN_COVERAGE':
-        return '📶';
-      case 'OUT_OF_COVERAGE':
-        return '📵';
-      case 'STATUS_CHANGED':
-        return '⚙️';
-      case 'STOP_MOVING':
-      case 'AT_ANCHOR':
-        return '⚓';
-      case 'START_MOVING':
-      case 'PORT_ARRIVAL':
-      case 'DEPARTURE':
-        return '🚢';
-      default:
-        return '📋';
-    }
-  };
-
-  const getEventColor = (type) => {
-    switch (type) {
-      case 'AIS_UPDATE':
-      case 'IN_COVERAGE':
-        return 'var(--success)';
-      case 'OUT_OF_COVERAGE':
-        return 'var(--danger)';
-      case 'STATUS_CHANGED':
-        return 'var(--primary)';
-      case 'PORT_ARRIVAL':
-        return 'var(--warning)';
-      default:
-        return 'var(--text-secondary)';
-    }
-  };
-
-  return (
-    <div className={styles.tableWrapper}>
-      <table className={styles.dataTable}>
-        <thead>
-          <tr>
-            <th>Time</th>
-            <th>Event</th>
-            <th>Details</th>
-            <th>Position / Dest</th>
-            <th>Info</th>
-          </tr>
-        </thead>
-        <tbody>
-          {events.map((event) => (
-            <tr 
-              key={event.id}
-              className={styles.eventRow}
-              onClick={() => {
-                if (event.portCallId) navigate(`/port-calls/${event.portCallId}`);
-                else if (event.vesselId) navigate(`/vessels/${event.vesselId}`);
-              }}
-            >
-              <td>
-                {event.timestamp 
-                  ? new Date(event.timestamp).toLocaleString('en-US', {
-                      year: 'numeric',
-                      month: '2-digit',
-                      day: '2-digit',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })
-                  : '---'}
-              </td>
-              <td>
-                <span 
-                  className={styles.eventIcon}
-                  style={{ color: getEventColor(event.type) }}
-                >
-                  {getEventIcon(event.type)}
-                </span>
-                {event.type?.replace(/_/g, ' ')}
-              </td>
-              <td>
-                {event.message || event.data?.port?.name || '---'}
-              </td>
-              <td>
-                {event.data?.lat && event.data?.lon 
-                  ? `${event.data.lat.toFixed(5)} / ${event.data.lon.toFixed(5)}`
-                  : event.data?.port?.name || '---'}
-              </td>
-              <td>
-                {event.data?.sog && `Speed: ${event.data.sog.toFixed(1)} kn`}
-                {event.data?.cog && `, Course: ${event.data.cog.toFixed(1)}°`}
-                {!event.data?.sog && !event.data?.cog && '⚓'}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <button className={styles.showMoreButton}>Show More</button>
-    </div>
-  );
+// Helper function to calculate distance between two coordinates (Haversine formula)
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 3440; // Earth radius in nautical miles
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
 }
 
 // Helper functions
 function getFlagEmoji(countryCode) {
-  if (!countryCode || countryCode.length !== 2) return '🏳️';
+  if (!countryCode || countryCode.length !== 2 || countryCode === '---') return '🏳️';
   const codePoints = countryCode
     .toUpperCase()
     .split('')
@@ -657,6 +424,7 @@ function getFlagEmoji(countryCode) {
 }
 
 function formatTimeAgo(date) {
+  if (!date || isNaN(date.getTime())) return '---';
   const now = new Date();
   const diffMs = now - date;
   const diffMins = Math.floor(diffMs / 60000);
