@@ -1,6 +1,6 @@
 .feed {
-  background-color: rgba(30, 41, 59, 0.85); /* Semi-transparent dark background */
-  backdrop-filter: blur(8px);
+  background-color: rgba(30, 41, 59, 0.9);
+  backdrop-filter: blur(10px);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   flex: 1;
@@ -8,34 +8,35 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-md);
 }
 
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
+  padding: 10px 12px;
   border-bottom: 1px solid var(--border);
-  background-color: var(--bg-secondary);
+  background-color: rgba(30, 41, 59, 0.8);
+  flex-shrink: 0;
 }
 
 .header h3 {
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 700;
   color: var(--text-primary);
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 0.5px;
   font-family: 'Courier New', monospace;
   margin: 0;
 }
 
 .count {
-  font-size: 11px;
+  font-size: 9px;
   color: var(--text-tertiary);
   background-color: var(--bg-tertiary);
-  padding: 2px 8px;
-  border-radius: 12px;
+  padding: 2px 6px;
+  border-radius: 10px;
   font-family: 'Courier New', monospace;
 }
 
@@ -43,16 +44,17 @@
   flex: 1;
   overflow-y: auto;
   padding: 8px;
+  min-height: 0;
 }
 
 .event {
   display: flex;
-  gap: 12px;
-  padding: 12px;
-  margin-bottom: 8px;
-  background-color: var(--bg-secondary);
-  border-left: 3px solid var(--border);
-  border-radius: var(--radius);
+  gap: 8px;
+  padding: 8px;
+  margin-bottom: 6px;
+  background-color: rgba(30, 41, 59, 0.6);
+  border-left: 2px solid var(--border);
+  border-radius: 6px;
   transition: all 0.2s;
   cursor: default;
 }
@@ -62,9 +64,9 @@
 }
 
 .event.clickable:hover {
-  background-color: var(--bg-hover);
+  background-color: rgba(51, 65, 85, 0.8);
   border-left-color: var(--primary);
-  transform: translateX(2px);
+  transform: translateX(1px);
 }
 
 .event.info {
@@ -83,7 +85,7 @@
   flex-shrink: 0;
   display: flex;
   align-items: flex-start;
-  padding-top: 2px;
+  padding-top: 1px;
 }
 
 .eventContent {
@@ -95,33 +97,33 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 4px;
+  margin-bottom: 3px;
 }
 
 .eventType {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
   color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
   font-family: 'Courier New', monospace;
 }
 
 .eventTime {
-  font-size: 10px;
+  font-size: 9px;
   color: var(--text-muted);
   font-family: 'Courier New', monospace;
 }
 
 .eventMessage {
-  font-size: 13px;
+  font-size: 11px;
   color: var(--text-primary);
-  line-height: 1.4;
-  margin-bottom: 4px;
+  line-height: 1.3;
+  margin-bottom: 2px;
 }
 
 .eventVessel {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-tertiary);
   font-weight: 500;
 }

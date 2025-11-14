@@ -1,35 +1,35 @@
 .panel {
   padding: 0;
   overflow: hidden;
-  background-color: rgba(30, 41, 59, 0.85); /* Semi-transparent dark background */
-  backdrop-filter: blur(8px);
+  background-color: rgba(30, 41, 59, 0.9);
+  backdrop-filter: blur(10px);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-md);
 }
 
 .header {
-  padding: 12px 16px;
+  padding: 10px 12px;
   border-bottom: 1px solid var(--border);
-  background-color: var(--bg-secondary);
+  background-color: rgba(30, 41, 59, 0.8);
 }
 
 .header h3 {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   color: var(--text-primary);
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 0.5px;
   font-family: 'Courier New', monospace;
   margin: 0;
 }
 
 .content {
-  padding: 16px;
+  padding: 12px;
 }
 
 .section {
-  margin-bottom: 24px;
+  margin-bottom: 16px;
 }
 
 .section:last-child {
@@ -37,63 +37,67 @@
 }
 
 .section h4 {
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 12px;
+  letter-spacing: 0.3px;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
 }
 
 .statsGrid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
+  gap: 8px;
 }
 
 .statItem {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 12px;
-  background-color: var(--bg-secondary);
+  gap: 3px;
+  padding: 8px;
+  background-color: rgba(30, 41, 59, 0.6);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: 6px;
+  text-align: center;
 }
 
 .statLabel {
-  font-size: 10px;
+  font-size: 9px;
   color: var(--text-tertiary);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
 }
 
 .statValue {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
   font-family: 'Courier New', monospace;
+  line-height: 1;
 }
 
 .statsList {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .listItem {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 12px;
-  background-color: var(--bg-secondary);
+  padding: 8px 10px;
+  background-color: rgba(30, 41, 59, 0.6);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font-size: 13px;
+  border-radius: 6px;
+  font-size: 11px;
   color: var(--text-secondary);
 }
 
 .listValue {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--text-primary);
   font-family: 'Courier New', monospace;

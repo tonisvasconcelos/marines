@@ -62,25 +62,33 @@ function Dashboard() {
         />
       </div>
 
-      {/* Overlay Content */}
+      {/* Overlay Content - 3 Column Layout */}
       <div className={styles.overlayContent}>
-        {/* Tactical Header */}
-        <div className={styles.header}>
-          <div>
-            <h1 className={styles.title}>{t('dashboard.operationsCenter')}</h1>
-            <p className={styles.subtitle}>{t('dashboard.maritimeAwareness')}</p>
+        {/* Main Content: Header + KPIs + Map */}
+        <div className={styles.mainContent}>
+          {/* Compact Header */}
+          <div className={styles.header}>
+            <div>
+              <h1 className={styles.title}>{t('dashboard.operationsCenter')}</h1>
+              <p className={styles.subtitle}>{t('dashboard.maritimeAwareness')}</p>
+            </div>
+            <div className={styles.statusIndicator}>
+              <span className={styles.statusDot}></span>
+              <span>{t('dashboard.live')}</span>
+            </div>
           </div>
-          <div className={styles.statusIndicator}>
-            <span className={styles.statusDot}></span>
-            <span>{t('dashboard.live')}</span>
+
+          {/* Compact KPI Bar */}
+          <OpsKpiBar stats={stats} />
+
+          {/* Map Container - fills remaining space */}
+          <div className={styles.mapContainer}>
+            {/* Map is in background layer */}
           </div>
         </div>
 
-        {/* Mission-Critical KPIs */}
-        <OpsKpiBar stats={stats} />
-
-        {/* Right Sidebar: Stats + Events */}
-        <div className={styles.sidebar}>
+        {/* Right Panel: Stats + Events */}
+        <div className={styles.rightPanel}>
           {/* Situational Awareness Panel */}
           <div className={styles.statsSection}>
             <OpsStatsPanel stats={stats} vessels={activeVessels} />

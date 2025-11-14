@@ -24,15 +24,15 @@
   z-index: 1;
 }
 
-/* Overlay content layer */
+/* Main content area - 3 column layout: [SIDEBAR] | [MAP+KPIs] | [RIGHT PANEL] */
 .overlayContent {
   position: relative;
   z-index: 10;
   width: 100%;
   height: 100%;
-  padding: 24px;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  gap: 0;
   pointer-events: none; /* Allow clicks to pass through to map */
 }
 
@@ -41,53 +41,62 @@
   pointer-events: auto;
 }
 
-/* Tactical Header */
+/* Left section: Header + KPIs + Map */
+.mainContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 16px;
+  gap: 12px;
+}
+
+/* Tactical Header - Compact */
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
-  padding: 16px 20px;
-  padding-bottom: 16px;
-  border-bottom: 2px solid var(--border);
-  background-color: rgba(15, 23, 42, 0.85); /* Semi-transparent dark background */
-  backdrop-filter: blur(8px);
+  padding: 10px 16px;
+  background-color: rgba(15, 23, 42, 0.9);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-md);
+  flex-shrink: 0;
 }
 
 .title {
-  font-size: 24px;
+  font-size: 18px;
   font-weight: 700;
   color: var(--text-primary);
-  margin: 0 0 4px 0;
-  letter-spacing: 2px;
+  margin: 0;
+  letter-spacing: 1px;
   text-transform: uppercase;
   font-family: 'Courier New', monospace;
 }
 
 .subtitle {
-  font-size: 13px;
+  font-size: 11px;
   color: var(--text-tertiary);
   margin: 0;
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 0.5px;
   font-weight: 500;
 }
 
 .statusIndicator {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font-size: 11px;
+  gap: 6px;
+  padding: 4px 10px;
+  background-color: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 4px;
+  font-size: 10px;
   font-weight: 700;
   color: var(--success);
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 0.5px;
   font-family: 'Courier New', monospace;
 }
 
@@ -108,38 +117,48 @@
   }
 }
 
-/* Right Sidebar: Stats + Events - positioned absolutely */
-.sidebar {
-  position: absolute;
-  top: 24px;
-  right: 24px;
-  width: 380px;
-  max-height: calc(100vh - 200px);
+/* Right Panel: Stats + Events - Fixed width, scrollable */
+.rightPanel {
+  width: 360px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
+  padding: 16px;
   min-height: 0;
   overflow-y: auto;
-  /* Hide scrollbar for cleaner look */
+  overflow-x: hidden;
+  /* Custom scrollbar */
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
 }
 
-.sidebar::-webkit-scrollbar {
+.rightPanel::-webkit-scrollbar {
   width: 6px;
 }
 
-.sidebar::-webkit-scrollbar-track {
+.rightPanel::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.sidebar::-webkit-scrollbar-thumb {
+.rightPanel::-webkit-scrollbar-thumb {
   background-color: var(--border);
   border-radius: 3px;
 }
 
-.sidebar::-webkit-scrollbar-thumb:hover {
+.rightPanel::-webkit-scrollbar-thumb:hover {
   background-color: var(--border-light);
+}
+
+/* Map container - fills remaining space */
+.mapContainer {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  /* Ensure map container doesn't cause overflow */
+  overflow: hidden;
 }
 
 .statsSection {
@@ -151,31 +170,32 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  /* Allow events section to scroll internally if needed, but don't clip parent */
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 /* Responsive Design */
 @media (max-width: 1400px) {
-  .sidebar {
+  .rightPanel {
     width: 320px;
   }
 }
 
 @media (max-width: 1024px) {
   .overlayContent {
-    padding: 16px;
+    flex-direction: column;
   }
 
-  .sidebar {
-    position: relative;
-    top: auto;
-    right: auto;
+  .mainContent {
+    padding: 12px;
+  }
+
+  .rightPanel {
     width: 100%;
-    max-height: none;
+    max-height: 400px;
     flex-direction: row;
     overflow-x: auto;
-    margin-top: 16px;
+    overflow-y: hidden;
+    padding: 12px;
   }
 
   .statsSection,
@@ -194,15 +214,21 @@
   .header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 12px;
+    gap: 8px;
+    padding: 8px 12px;
   }
 
   .title {
-    font-size: 20px;
+    font-size: 16px;
   }
 
-  .sidebar {
+  .subtitle {
+    font-size: 10px;
+  }
+
+  .rightPanel {
     flex-direction: column;
+    max-height: none;
   }
 
   .statsSection,
