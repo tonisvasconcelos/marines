@@ -43,12 +43,25 @@ async function makeRequest(endpoint, apiKey, secretKey, params = {}) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`MyShipTracking API error: ${response.status} - ${errorText}`);
+      const errorMessage = `MyShipTracking API error: ${response.status} - ${errorText}`;
+      console.error(errorMessage);
+      console.error('Request URL:', url.toString().replace(/apikey=[^&]+/, 'apikey=***').replace(/secret=[^&]+/, 'secret=***'));
+      throw new Error(errorMessage);
     }
 
-    return await response.json();
+    const data = await response.json();
+    console.log('MyShipTracking API response received:', {
+      endpoint,
+      hasData: !!data,
+      dataKeys: data ? Object.keys(data) : [],
+    });
+    return data;
   } catch (error) {
-    console.error('MyShipTracking API request failed:', error);
+    console.error('MyShipTracking API request failed:', {
+      endpoint,
+      error: error.message,
+      url: url.toString().replace(/apikey=[^&]+/, 'apikey=***').replace(/secret=[^&]+/, 'secret=***'),
+    });
     throw error;
   }
 }

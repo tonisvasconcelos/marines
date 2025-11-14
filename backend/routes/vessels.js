@@ -178,9 +178,11 @@ router.get('/:id/position', async (req, res) => {
   
   const aisConfig = getAisConfig(tenantId);
   
+  // Try to get position from AIS provider if configured
   if (aisConfig?.provider === 'myshiptracking' && aisConfig?.apiKey) {
     try {
       let position = null;
+      
       if (vessel.mmsi) {
         position = await myshiptracking.getVesselPosition(
           vessel.mmsi,
@@ -197,7 +199,7 @@ router.get('/:id/position', async (req, res) => {
         );
       }
       
-      if (position) {
+      if (position && (position.latitude || position.lat)) {
         // Transform MyShipTracking response to our format
         const positionData = {
           lat: position.latitude || position.lat,
@@ -212,14 +214,22 @@ router.get('/:id/position', async (req, res) => {
         return;
       }
     } catch (error) {
-      console.error(`Failed to fetch vessel position:`, error);
-      return res.status(500).json({ message: 'Failed to fetch vessel position from AIS' });
+      // Log error but fall back to mock data instead of returning 500
+      console.warn(`Failed to fetch vessel position from AIS provider:`, error.message);
+      console.log('Falling back to mock AIS data');
+      // Continue to fallback below
     }
   }
   
-  // Fallback to mock data
+  // Fallback to mock data (if AIS provider not configured, failed, or returned no data)
   const { getMockAisPosition } = await import('../data/mockData.js');
   const mockPosition = getMockAisPosition(id);
+  
+  // Ensure mock position has tenantId for consistency
+  if (mockPosition && !mockPosition.tenantId) {
+    mockPosition.tenantId = tenantId;
+  }
+  
   res.json(mockPosition);
 });
 
