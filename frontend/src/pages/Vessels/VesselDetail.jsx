@@ -169,10 +169,64 @@ function VesselDetail() {
     draught: vessel.draught || vessel.draft || position?.draught || position?.draft || null,
   };
 
-  // Extract AIS position data - safe access
+  // Extract AIS position data - safe access with proper normalization
+  const rawLat = position?.lat || position?.Lat || position?.latitude || position?.Latitude || null;
+  const rawLon = position?.lon || position?.Lon || position?.longitude || position?.Longitude || null;
+  
+  // Debug: Log raw position data to help diagnose plotting issues
+  if (position && (rawLat || rawLon)) {
+    console.log('[VesselDetail] Raw position data:', {
+      raw: position,
+      extracted: { lat: rawLat, lon: rawLon },
+      vesselId: id,
+      vesselName: vessel?.name,
+    });
+  }
+  
+  // Convert to numbers and validate
+  let normalizedLat = rawLat != null ? (typeof rawLat === 'string' ? parseFloat(rawLat) : rawLat) : null;
+  let normalizedLon = rawLon != null ? (typeof rawLon === 'string' ? parseFloat(rawLon) : rawLon) : null;
+  
+  // Validate coordinate ranges (common issue: coordinates might be swapped)
+  if (normalizedLat != null && normalizedLon != null && !isNaN(normalizedLat) && !isNaN(normalizedLon)) {
+    // Check if coordinates might be swapped (lat > 90 or lat < -90, or lon within lat range)
+    if ((normalizedLat > 90 || normalizedLat < -90) && (normalizedLon >= -90 && normalizedLon <= 90)) {
+      // Coordinates appear to be swapped - swap them back
+      console.warn('[VesselDetail] Coordinates appear to be swapped, correcting:', { 
+        original: { lat: normalizedLat, lon: normalizedLon },
+        vesselId: id,
+        vesselName: vessel?.name,
+      });
+      [normalizedLat, normalizedLon] = [normalizedLon, normalizedLat];
+    }
+    
+    // Final validation
+    if (normalizedLat < -90 || normalizedLat > 90 || normalizedLon < -180 || normalizedLon > 180) {
+      console.error('[VesselDetail] Invalid coordinate ranges after normalization:', { 
+        lat: normalizedLat, 
+        lon: normalizedLon,
+        vesselId: id,
+        vesselName: vessel?.name,
+      });
+      normalizedLat = null;
+      normalizedLon = null;
+    } else {
+      // Log successful normalization
+      console.log('[VesselDetail] Normalized coordinates:', {
+        lat: normalizedLat,
+        lon: normalizedLon,
+        vesselId: id,
+        vesselName: vessel?.name,
+      });
+    }
+  } else {
+    normalizedLat = null;
+    normalizedLon = null;
+  }
+  
   const aisPositionData = {
-    latitude: position?.lat || position?.Lat || position?.latitude || position?.Latitude || null,
-    longitude: position?.lon || position?.Lon || position?.longitude || position?.Longitude || null,
+    latitude: normalizedLat,
+    longitude: normalizedLon,
     speed: position?.sog || position?.speed || position?.speedOverGround || null,
     course: position?.cog || position?.course || position?.courseOverGround || null,
     heading: position?.heading || null,

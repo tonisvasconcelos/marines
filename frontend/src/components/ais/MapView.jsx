@@ -31,16 +31,44 @@ function MapView({ position, track, vesselName }) {
     const map = mapInstanceRef.current;
 
     // Update position marker
-    if (position && position.lat && position.lon) {
-      if (markerRef.current) {
-        map.removeLayer(markerRef.current);
+    if (position) {
+      // Normalize and validate coordinates
+      let lat = position.lat || position.Lat || position.latitude || position.Latitude;
+      let lon = position.lon || position.Lon || position.longitude || position.Longitude;
+      
+      // Convert to numbers if they're strings
+      if (typeof lat === 'string') lat = parseFloat(lat);
+      if (typeof lon === 'string') lon = parseFloat(lon);
+      
+      // Validate coordinates are valid numbers and within valid ranges
+      if (lat != null && lon != null && !isNaN(lat) && !isNaN(lon)) {
+        // Validate latitude is between -90 and 90
+        if (lat < -90 || lat > 90) {
+          console.error('Invalid latitude:', lat, 'Position data:', position);
+          return;
+        }
+        // Validate longitude is between -180 and 180
+        if (lon < -180 || lon > 180) {
+          console.error('Invalid longitude:', lon, 'Position data:', position);
+          return;
+        }
+        
+        // Remove existing marker
+        if (markerRef.current) {
+          map.removeLayer(markerRef.current);
+        }
+
+        // Create marker with validated coordinates
+        // Leaflet expects [lat, lon] format
+        markerRef.current = L.marker([lat, lon])
+          .addTo(map)
+          .bindPopup(vesselName || 'Vessel Position');
+
+        // Center map on vessel position
+        map.setView([lat, lon], 10);
+      } else {
+        console.warn('Invalid position coordinates:', { lat, lon, position });
       }
-
-      markerRef.current = L.marker([position.lat, position.lon])
-        .addTo(map)
-        .bindPopup(vesselName || 'Vessel Position');
-
-      map.setView([position.lat, position.lon], 10);
     }
 
     // Update track polyline
@@ -49,15 +77,33 @@ function MapView({ position, track, vesselName }) {
         map.removeLayer(polylineRef.current);
       }
 
-      const trackPoints = track.map((p) => [p.lat, p.lon]);
-      polylineRef.current = L.polyline(trackPoints, {
-        color: '#3b82f6',
-        weight: 3,
-        opacity: 0.7,
-      }).addTo(map);
-
-      // Fit bounds to show entire track
+      // Normalize and validate track points
+      const trackPoints = track
+        .map((p) => {
+          let lat = p.lat || p.Lat || p.latitude || p.Latitude;
+          let lon = p.lon || p.Lon || p.longitude || p.Longitude;
+          
+          // Convert to numbers if they're strings
+          if (typeof lat === 'string') lat = parseFloat(lat);
+          if (typeof lon === 'string') lon = parseFloat(lon);
+          
+          // Validate coordinates
+          if (lat != null && lon != null && !isNaN(lat) && !isNaN(lon) &&
+              lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+            return [lat, lon];
+          }
+          return null;
+        })
+        .filter(p => p !== null); // Remove invalid points
+      
       if (trackPoints.length > 0) {
+        polylineRef.current = L.polyline(trackPoints, {
+          color: '#3b82f6',
+          weight: 3,
+          opacity: 0.7,
+        }).addTo(map);
+
+        // Fit bounds to show entire track
         map.fitBounds(trackPoints);
       }
     }
