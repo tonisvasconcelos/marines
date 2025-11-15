@@ -71,7 +71,11 @@ export function MapEngine({
         sources: {
           'osm-tiles': {
             type: 'raster',
-            tiles: ['https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'],
+            tiles: [
+              'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+              'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
+              'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
+            ],
             tileSize: 256,
             attribution: '© OpenStreetMap contributors',
           },
@@ -168,7 +172,11 @@ export function MapEngine({
       if (!map.getSource('base-tiles')) {
         map.addSource('base-tiles', {
           type: 'raster',
-          tiles: ['https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'],
+          tiles: [
+            'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+            'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
+            'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
+          ],
           tileSize: 256,
           attribution: '© OpenStreetMap contributors',
         });

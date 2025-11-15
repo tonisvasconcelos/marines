@@ -1,0 +1,112 @@
+.vesselSearch {
+  position: relative;
+  width: 100%;
+  max-width: 400px;
+  z-index: 1000;
+}
+
+.searchInputContainer {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 8px;
+  padding: 8px 12px;
+  backdrop-filter: blur(10px);
+}
+
+.searchIcon {
+  color: #94a3b8;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.searchInput {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #f1f5f9;
+  font-size: 14px;
+  outline: none;
+}
+
+.searchInput::placeholder {
+  color: #64748b;
+}
+
+.clearButton {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+}
+
+.clearButton:hover {
+  color: #f1f5f9;
+}
+
+.resultsDropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background: rgba(15, 23, 42, 0.98);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 8px;
+  max-height: 400px;
+  overflow-y: auto;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px);
+}
+
+.loading,
+.noResults {
+  padding: 16px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.resultsList {
+  padding: 4px;
+}
+
+.resultItem {
+  padding: 12px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.resultItem:hover {
+  background: rgba(30, 41, 59, 0.8);
+}
+
+.resultName {
+  font-weight: 600;
+  color: #60a5fa;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.resultDetails {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.resultDetails span {
+  padding: 2px 6px;
+  background: rgba(30, 41, 59, 0.6);
+  border-radius: 4px;
+}
+

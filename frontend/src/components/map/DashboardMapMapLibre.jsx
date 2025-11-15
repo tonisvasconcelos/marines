@@ -12,7 +12,10 @@ import { OverlayControls } from './OverlayControls';
 import { CoordinateReadout, MapControlButtons, ScaleBar } from './MapLibreControls';
 import { MeasurementTool } from './MeasurementTool';
 import { MiniPopup } from './MiniPopup';
+import { VesselSearch } from './VesselSearch';
 import { normalizeVesselPosition } from '../../utils/coordinateUtils';
+import { getVesselsInZone, type Bounds } from '../../api/myshiptracking';
+import { useQuery } from '@tanstack/react-query';
 import styles from './DashboardMap.module.css';
 
 function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick }) {
@@ -23,8 +26,20 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick }) {
   const [baseLayer, setBaseLayer] = useState('standard');
   const [overlays, setOverlays] = useState({});
   const [measurementEnabled, setMeasurementEnabled] = useState(false);
+  const [mapBounds, setMapBounds] = useState<Bounds | null>(null);
   const hasUserInteractedRef = useRef(false);
   const initialBoundsSetRef = useRef(false);
+
+  // Fetch vessels in current map view using MyShipTracking API
+  const { data: zoneVessels } = useQuery({
+    queryKey: ['vessels-in-zone', mapBounds],
+    queryFn: () => {
+      if (!mapBounds) return [];
+      return getVesselsInZone(mapBounds, undefined, false); // Use simple response to save credits
+    },
+    enabled: !!mapBounds,
+    staleTime: 30000, // Cache for 30 seconds
+  });
 
   // Handle map ready callback
   const handleMapReady = useCallback((map) => {
@@ -39,6 +54,21 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick }) {
     map.on('dragstart', () => {
       hasUserInteractedRef.current = true;
     });
+
+    // Update map bounds when map moves/zooms
+    const updateBounds = () => {
+      const bounds = map.getBounds();
+      setMapBounds({
+        minlon: bounds.getWest(),
+        maxlon: bounds.getEast(),
+        minlat: bounds.getSouth(),
+        maxlat: bounds.getNorth(),
+      });
+    };
+
+    map.on('moveend', updateBounds);
+    map.on('zoomend', updateBounds);
+    updateBounds(); // Initial bounds
 
     // Auto-fit bounds on initial load
     if (vessels && vessels.length > 0 && !hasUserInteractedRef.current && !initialBoundsSetRef.current) {
@@ -314,10 +344,24 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick }) {
       {mapRef.current && mapRef.current.isStyleLoaded() && (
         <VesselLayer
           map={mapRef.current}
-          vessels={vessels}
+          vessels={zoneVessels || vessels} // Use zone vessels if available, fallback to props
           onVesselClick={handleVesselClick}
         />
       )}
+      
+      {/* Vessel Search */}
+      <div className={styles.vesselSearchContainer}>
+        <VesselSearch
+          onSelectVessel={(vessel) => {
+            // Center map on selected vessel
+            if (mapRef.current && vessel.mmsi) {
+              // Fetch vessel position and center map
+              // For now, just trigger a search
+              console.log('Vessel selected:', vessel);
+            }
+          }}
+        />
+      </div>
       
       {/* Map Controls */}
       {mapRef.current && (
@@ -352,6 +396,7 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick }) {
             vessel={selectedVessel}
             position={selectedVessel.position}
             onClose={handleClosePopup}
+            apiKey={undefined} // Will be handled by backend proxy
           />
         </div>
       )}

@@ -4,22 +4,83 @@
  * Shows on vessel click with essential AIS data
  */
 
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiX, FiExternalLink } from 'react-icons/fi';
+import { useQuery } from '@tanstack/react-query';
+import { FiX, FiExternalLink, FiMap, FiClock } from 'react-icons/fi';
+import { getVesselStatus, getVesselsNearby, getVesselTrack, type VesselStatus, type NearbyVessel, type TrackPoint } from '../../api/myshiptracking';
 import styles from './MiniPopup.module.css';
 
-export function MiniPopup({ vessel, position, onClose }) {
+interface MiniPopupProps {
+  vessel: {
+    id?: string;
+    name?: string;
+    mmsi?: string;
+    imo?: string;
+    type?: string;
+    status?: string;
+    position?: {
+      lat?: number;
+      lon?: number;
+      lng?: number;
+      sog?: number;
+      speed?: number;
+      cog?: number;
+      course?: number;
+      navStatus?: string;
+      timestamp?: string;
+    };
+  };
+  position?: { lat?: number; lon?: number; lng?: number };
+  onClose: () => void;
+  apiKey?: string;
+}
+
+export function MiniPopup({ vessel, position, onClose, apiKey }: MiniPopupProps) {
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<'details' | 'nearby' | 'track'>('details');
+  const [showHistory, setShowHistory] = useState(false);
 
   if (!vessel) return null;
 
-  const pos = vessel.position || position || {};
-  const status = vessel.status || 'AT_SEA';
-  const vesselType = vessel.type || vessel.ship_type || vessel.vessel_type || 'Unknown';
+  const mmsi = vessel.mmsi;
+  const imo = vessel.imo;
+
+  // Fetch extended vessel status
+  const { data: vesselStatus, isLoading: statusLoading } = useQuery({
+    queryKey: ['vessel-status', mmsi || imo],
+    queryFn: () => getVesselStatus(mmsi, imo, true), // Extended response
+    enabled: !!(mmsi || imo) && !!apiKey,
+    staleTime: 30000,
+  });
+
+  // Fetch nearby vessels
+  const { data: nearbyVessels, isLoading: nearbyLoading } = useQuery({
+    queryKey: ['vessels-nearby', mmsi],
+    queryFn: () => getVesselsNearby(mmsi!, 20, false),
+    enabled: activeTab === 'nearby' && !!mmsi && !!apiKey,
+    staleTime: 60000,
+  });
+
+  // Fetch vessel track
+  const { data: trackPoints, isLoading: trackLoading } = useQuery({
+    queryKey: ['vessel-track', mmsi || imo, showHistory],
+    queryFn: () => {
+      const to = new Date();
+      const from = new Date();
+      from.setDate(from.getDate() - 1); // Last 24 hours
+      return getVesselTrack(mmsi, imo, from, to, undefined, 1);
+    },
+    enabled: showHistory && !!(mmsi || imo) && !!apiKey,
+    staleTime: 300000, // Cache for 5 minutes
+  });
+
+  const status = vesselStatus || vessel.position || position || {};
+  const vesselType = vesselStatus?.vessel_type || vessel.type || 'Unknown';
 
   // Format coordinates for display (not used for plotting)
-  const displayLat = pos.lat ? pos.lat.toFixed(6) : '---';
-  const displayLon = pos.lon ? pos.lon.toFixed(6) : '---';
+  const displayLat = status.lat ? status.lat.toFixed(6) : (status.lat || '---');
+  const displayLon = (status.lng || status.lon) ? (status.lng || status.lon).toFixed(6) : '---';
 
   const handleViewDetails = () => {
     if (vessel.portCallId) {

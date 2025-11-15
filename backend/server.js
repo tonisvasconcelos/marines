@@ -11,6 +11,7 @@ import opsSitesRoutes from './routes/opsSites.js';
 import customersRoutes from './routes/customers.js';
 import agentsRoutes from './routes/agents.js';
 import teamsRoutes from './routes/teams.js';
+import myshiptrackingRoutes from './routes/myshiptracking.js';
 import { authenticateToken } from './middleware/auth.js';
 import { testConnection } from './db/connection.js';
 
@@ -143,6 +144,7 @@ app.use('/api/ops-sites', authenticateToken, opsSitesRoutes);
 app.use('/api/customers', authenticateToken, customersRoutes);
 app.use('/api/agents', authenticateToken, agentsRoutes);
 app.use('/api/teams', authenticateToken, teamsRoutes);
+app.use('/api/myshiptracking', authenticateToken, myshiptrackingRoutes);
 
 // Test database connection on startup
 if (process.env.DATABASE_URL) {
