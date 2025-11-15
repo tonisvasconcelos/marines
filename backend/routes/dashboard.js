@@ -222,14 +222,24 @@ router.get('/active-vessels', async (req, res) => {
           }
         }
       } catch (error) {
-        console.warn(`Failed to fetch AIS position for vessel ${vessel.id} (${vessel.name}):`, error.message);
+        console.error(`[getVesselPosition] MyShipTracking API error for vessel ${vessel.id} (${vessel.name}):`, {
+          error: error.message,
+          stack: error.stack,
+          vesselMmsi: vessel.mmsi,
+          vesselImo: vessel.imo,
+        });
         // Fall through to mock data
+      }
+    } else {
+      // AIS API not configured
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[getVesselPosition] AIS API not configured for tenant ${tenantId}, using mock data for vessel ${vessel.id}`);
       }
     }
     
-    // Fallback to mock data
+    // Fallback to mock data (only if AIS API not configured, failed, or returned no data)
     const mockPos = getMockAisPosition(vessel.id);
-    return {
+    const mockPositionData = {
       lat: mockPos.lat,
       lon: mockPos.lon,
       timestamp: mockPos.timestamp,
@@ -239,6 +249,18 @@ router.get('/active-vessels', async (req, res) => {
       navStatus: mockPos.navStatus,
       source: 'mock',
     };
+    
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[getVesselPosition] Using mock position for vessel ${vessel.id} (${vessel.name}):`, {
+        source: 'mock',
+        position: mockPositionData,
+        reason: aisConfig?.provider === 'myshiptracking' && aisConfig?.apiKey 
+          ? 'AIS API failed or returned no data' 
+          : 'AIS API not configured',
+      });
+    }
+    
+    return mockPositionData;
   };
   
   const activeVessels = await Promise.all(
