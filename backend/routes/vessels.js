@@ -410,6 +410,10 @@ router.get('/:id', async (req, res) => {
   }
   
   res.json(vessel);
+  } catch (error) {
+    console.error('Error fetching vessel:', error);
+    res.status(500).json({ message: 'Failed to fetch vessel' });
+  }
 });
 
 // DELETE /api/vessels/:id - Delete a vessel
