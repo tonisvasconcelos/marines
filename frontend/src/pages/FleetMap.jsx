@@ -55,7 +55,31 @@ function FleetMap() {
         api
           .get(`/ais/vessels/${portCall.vesselId}/last-position`)
           .then((position) => {
-            if (position && position.lat && position.lon) {
+            // CRITICAL: Extract full-precision coordinates from API response
+            // DO NOT round, truncate, or format these values - they are used for map markers
+            const rawLat = position?.lat ?? position?.latitude ?? position?.Lat ?? position?.Latitude ?? null;
+            const rawLon = position?.lon ?? position?.longitude ?? position?.Lon ?? position?.Longitude ?? null;
+            
+            // Convert to numbers if strings (use parseFloat to preserve full decimal precision)
+            let lat = rawLat != null ? (typeof rawLat === 'string' ? parseFloat(rawLat) : Number(rawLat)) : null;
+            let lon = rawLon != null ? (typeof rawLon === 'string' ? parseFloat(rawLon) : Number(rawLon)) : null;
+            
+            // Validate coordinates are finite numbers
+            if (lat != null && lon != null && isFinite(lat) && isFinite(lon) &&
+                lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+              
+              if (import.meta.env.DEV) {
+                console.log('[FleetMap] Creating marker with full-precision coordinates:', {
+                  vesselId: portCall.vesselId,
+                  vesselName: portCall.vessel?.name || 'Unknown',
+                  lat,
+                  lon,
+                  latPrecision: lat.toString().split('.')[1]?.length || 0,
+                  lonPrecision: lon.toString().split('.')[1]?.length || 0,
+                  note: 'Using raw API coordinates - no rounding applied',
+                });
+              }
+              
               const color = portCall.status === 'IN_PROGRESS' ? 'blue' : 'orange';
               const icon = L.divIcon({
                 className: 'custom-marker',
@@ -64,33 +88,8 @@ function FleetMap() {
                 iconAnchor: [10, 10],
               });
 
-              const marker = L.marker([position.lat, position.lon], { icon })
-                .addTo(map)
-                .bindPopup(
-                  `<strong>${portCall.vessel?.name || 'Unknown'}</strong><br/>${portCall.port?.name || portCall.portId}`
-                )
-                .on('click', () => navigate(`/port-calls/${portCall.id}`));
-
-              markersRef.current[portCall.id] = marker;
-              bounds.push([position.lat, position.lon]);
-            }
-            processedCount++;
-            if (processedCount === portCalls.length && bounds.length > 0) {
-              map.fitBounds(bounds, { padding: [50, 50] });
-            }
-          })
-          .catch(() => {
-            // If no AIS data, use port coordinates if available
-            if (portCall.port?.coordinates) {
-              const { lat, lon } = portCall.port.coordinates;
-              const color = portCall.status === 'IN_PROGRESS' ? 'blue' : 'orange';
-              const icon = L.divIcon({
-                className: 'custom-marker',
-                html: `<div style="background-color: ${color}; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`,
-                iconSize: [20, 20],
-                iconAnchor: [10, 10],
-              });
-
+              // CRITICAL: Use full-precision coordinates for Leaflet marker
+              // Leaflet expects [latitude, longitude] format with full decimal precision
               const marker = L.marker([lat, lon], { icon })
                 .addTo(map)
                 .bindPopup(
@@ -99,7 +98,47 @@ function FleetMap() {
                 .on('click', () => navigate(`/port-calls/${portCall.id}`));
 
               markersRef.current[portCall.id] = marker;
-              bounds.push([lat, lon]);
+              bounds.push([lat, lon]); // Use full-precision coordinates for bounds
+            }
+            processedCount++;
+            if (processedCount === portCalls.length && bounds.length > 0) {
+              map.fitBounds(bounds, { padding: [50, 50] });
+            }
+          })
+          .catch(() => {
+            // If no AIS data, use port coordinates if available
+            // CRITICAL: Port coordinates should also preserve full precision
+            if (portCall.port?.coordinates) {
+              const rawLat = portCall.port.coordinates.lat ?? portCall.port.coordinates.latitude ?? null;
+              const rawLon = portCall.port.coordinates.lon ?? portCall.port.coordinates.longitude ?? null;
+              
+              // Convert to numbers if strings (preserve full precision)
+              let lat = rawLat != null ? (typeof rawLat === 'string' ? parseFloat(rawLat) : Number(rawLat)) : null;
+              let lon = rawLon != null ? (typeof rawLon === 'string' ? parseFloat(rawLon) : Number(rawLon)) : null;
+              
+              // Validate coordinates
+              if (lat != null && lon != null && isFinite(lat) && isFinite(lon) &&
+                  lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+                
+                const color = portCall.status === 'IN_PROGRESS' ? 'blue' : 'orange';
+                const icon = L.divIcon({
+                  className: 'custom-marker',
+                  html: `<div style="background-color: ${color}; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`,
+                  iconSize: [20, 20],
+                  iconAnchor: [10, 10],
+                });
+
+                // CRITICAL: Use full-precision port coordinates for Leaflet marker
+                const marker = L.marker([lat, lon], { icon })
+                  .addTo(map)
+                  .bindPopup(
+                    `<strong>${portCall.vessel?.name || 'Unknown'}</strong><br/>${portCall.port?.name || portCall.portId}`
+                  )
+                  .on('click', () => navigate(`/port-calls/${portCall.id}`));
+
+                markersRef.current[portCall.id] = marker;
+                bounds.push([lat, lon]); // Use full-precision coordinates for bounds
+              }
             }
             processedCount++;
             if (processedCount === portCalls.length && bounds.length > 0) {
