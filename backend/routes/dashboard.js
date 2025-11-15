@@ -1,5 +1,7 @@
 import express from 'express';
 import { getMockPortCalls, getMockVessels, getMockAisPosition, getMockOpsSites } from '../data/mockData.js';
+import * as myshiptracking from '../services/myshiptracking.js';
+import { getAisConfig } from '../services/aisConfig.js';
 
 const router = express.Router();
 
@@ -77,74 +79,119 @@ router.get('/stats', (req, res) => {
 });
 
 // GET /api/dashboard/active-vessels - Get all active vessels with positions
-router.get('/active-vessels', (req, res) => {
+router.get('/active-vessels', async (req, res) => {
   const { tenantId } = req;
   const vessels = getMockVessels(tenantId);
   const portCalls = getMockPortCalls(tenantId);
+  const aisConfig = getAisConfig(tenantId);
   
-  const activeVessels = vessels.map((vessel) => {
-    const portCall = portCalls.find((pc) => pc.vesselId === vessel.id && 
-      (pc.status === 'IN_PROGRESS' || pc.status === 'PLANNED'));
-    
-    let position = null;
-    let status = 'AT_SEA';
-    
-    if (portCall) {
-      if (portCall.status === 'IN_PROGRESS') {
-        status = 'IN_PORT';
-        // Get position from port or ops site - use port coordinates if available, otherwise maritime position
-        if (portCall.port?.coordinates) {
-          position = {
-            lat: portCall.port.coordinates.lat,
-            lon: portCall.port.coordinates.lon,
-            timestamp: new Date().toISOString(),
-          };
-        } else {
-          // Use a position in Guanabara Bay (in port area)
-          position = {
-            lat: -22.90 + (Math.random() - 0.5) * 0.03, // Inner bay area
-            lon: -43.13 + (Math.random() - 0.5) * 0.03,
-            timestamp: new Date().toISOString(),
+  // Helper function to get AIS position (tries real API first, falls back to mock)
+  const getVesselPosition = async (vessel) => {
+    // Try real AIS API if configured
+    if (aisConfig?.provider === 'myshiptracking' && aisConfig?.apiKey) {
+      try {
+        let position = null;
+        
+        if (vessel.mmsi) {
+          position = await myshiptracking.getVesselPosition(
+            vessel.mmsi,
+            aisConfig.apiKey,
+            aisConfig.secretKey
+          );
+        } else if (vessel.imo) {
+          // Remove 'IMO' prefix if present
+          const imoNumber = vessel.imo.replace(/^IMO/i, '').trim();
+          position = await myshiptracking.getVesselByImo(
+            imoNumber,
+            aisConfig.apiKey,
+            aisConfig.secretKey
+          );
+        }
+        
+        if (position && (position.latitude || position.lat)) {
+          // Transform MyShipTracking response to our format (normalize coordinates)
+          return {
+            lat: position.latitude || position.lat,
+            lon: position.longitude || position.lon,
+            timestamp: position.timestamp || position.last_position_time || new Date().toISOString(),
+            sog: position.speed || position.sog,
+            cog: position.course || position.cog,
+            heading: position.heading,
+            navStatus: position.nav_status || position.status,
+            source: 'myshiptracking',
           };
         }
-      } else if (portCall.status === 'PLANNED') {
-        status = 'INBOUND';
-        // Get AIS position
-        const aisPos = getMockAisPosition(vessel.id);
-        position = {
-          lat: aisPos.lat,
-          lon: aisPos.lon,
-          timestamp: aisPos.timestamp,
-          sog: aisPos.sog,
-          cog: aisPos.cog,
-        };
+      } catch (error) {
+        console.warn(`Failed to fetch AIS position for vessel ${vessel.id} (${vessel.name}):`, error.message);
+        // Fall through to mock data
       }
-    } else {
-      // Vessel at sea
-      const aisPos = getMockAisPosition(vessel.id);
-      position = {
-        lat: aisPos.lat,
-        lon: aisPos.lon,
-        timestamp: aisPos.timestamp,
-        sog: aisPos.sog,
-        cog: aisPos.cog,
-      };
     }
     
+    // Fallback to mock data
+    const mockPos = getMockAisPosition(vessel.id);
     return {
-      ...vessel,
-      position,
-      status,
-      portCallId: portCall?.id,
-      portCall: portCall ? {
-        id: portCall.id,
-        port: portCall.port,
-        eta: portCall.eta,
-        etd: portCall.etd,
-        status: portCall.status,
-      } : null,
+      lat: mockPos.lat,
+      lon: mockPos.lon,
+      timestamp: mockPos.timestamp,
+      sog: mockPos.sog,
+      cog: mockPos.cog,
+      heading: mockPos.heading,
+      navStatus: mockPos.navStatus,
+      source: 'mock',
     };
-  });
+  };
+  
+  const activeVessels = await Promise.all(
+    vessels.map(async (vessel) => {
+      const portCall = portCalls.find((pc) => pc.vesselId === vessel.id && 
+        (pc.status === 'IN_PROGRESS' || pc.status === 'PLANNED'));
+      
+      let position = null;
+      let status = 'AT_SEA';
+      
+      if (portCall) {
+        if (portCall.status === 'IN_PROGRESS') {
+          status = 'IN_PORT';
+          // Get position from port or ops site - use port coordinates if available, otherwise maritime position
+          if (portCall.port?.coordinates) {
+            position = {
+              lat: portCall.port.coordinates.lat,
+              lon: portCall.port.coordinates.lon,
+              timestamp: new Date().toISOString(),
+            };
+          } else {
+            // Use a position in Guanabara Bay (in port area)
+            position = {
+              lat: -22.90 + (Math.random() - 0.5) * 0.03, // Inner bay area
+              lon: -43.13 + (Math.random() - 0.5) * 0.03,
+              timestamp: new Date().toISOString(),
+            };
+          }
+        } else if (portCall.status === 'PLANNED') {
+          status = 'INBOUND';
+          // Get AIS position (real API or mock)
+          position = await getVesselPosition(vessel);
+        }
+      } else {
+        // Vessel at sea - get AIS position (real API or mock)
+        position = await getVesselPosition(vessel);
+      }
+      
+      return {
+        ...vessel,
+        position,
+        status,
+        portCallId: portCall?.id,
+        portCall: portCall ? {
+          id: portCall.id,
+          port: portCall.port,
+          eta: portCall.eta,
+          etd: portCall.etd,
+          status: portCall.status,
+        } : null,
+      };
+    })
+  );
   
   res.json(activeVessels);
 });
