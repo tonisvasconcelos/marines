@@ -111,27 +111,56 @@ router.get('/active-vessels', async (req, res) => {
   const portCalls = getMockPortCalls(tenantId);
   const aisConfig = getAisConfig(tenantId);
   
+  // Log AIS configuration status
+  console.log('[dashboard/active-vessels] AIS Configuration:', {
+    tenantId,
+    hasConfig: !!aisConfig,
+    provider: aisConfig?.provider,
+    hasApiKey: !!aisConfig?.apiKey,
+    hasSecretKey: !!aisConfig?.secretKey,
+  });
+  
   // Helper function to get AIS position (tries real API first, falls back to mock)
   const getVesselPosition = async (vessel) => {
     // Try real AIS API if configured
     if (aisConfig?.provider === 'myshiptracking' && aisConfig?.apiKey) {
+      console.log(`[getVesselPosition] Attempting to fetch real AIS data for vessel ${vessel.id} (${vessel.name})`, {
+        hasMmsi: !!vessel.mmsi,
+        hasImo: !!vessel.imo,
+        mmsi: vessel.mmsi,
+        imo: vessel.imo,
+      });
       try {
         let position = null;
         
         if (vessel.mmsi) {
+          console.log(`[getVesselPosition] Fetching position by MMSI: ${vessel.mmsi}`);
           position = await myshiptracking.getVesselPosition(
             vessel.mmsi,
             aisConfig.apiKey,
             aisConfig.secretKey
           );
+          console.log(`[getVesselPosition] MyShipTracking API response (MMSI):`, {
+            hasPosition: !!position,
+            hasLat: !!(position?.latitude || position?.lat),
+            hasLon: !!(position?.longitude || position?.lon),
+          });
         } else if (vessel.imo) {
           // Remove 'IMO' prefix if present
           const imoNumber = vessel.imo.replace(/^IMO/i, '').trim();
+          console.log(`[getVesselPosition] Fetching position by IMO: ${imoNumber}`);
           position = await myshiptracking.getVesselByImo(
             imoNumber,
             aisConfig.apiKey,
             aisConfig.secretKey
           );
+          console.log(`[getVesselPosition] MyShipTracking API response (IMO):`, {
+            hasPosition: !!position,
+            hasLat: !!(position?.latitude || position?.lat),
+            hasLon: !!(position?.longitude || position?.lon),
+          });
+        } else {
+          console.warn(`[getVesselPosition] Vessel ${vessel.id} (${vessel.name}) has no MMSI or IMO - cannot query AIS API`);
         }
         
         if (position && (position.latitude || position.lat)) {
