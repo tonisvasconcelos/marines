@@ -35,7 +35,7 @@ const getAllowedOrigins = () => {
     origins.push(...process.env.FRONTEND_URLS.split(',').map(url => url.trim()));
   }
   
-  // Common Vercel deployment URLs (add these if not already in FRONTEND_URL)
+  // Common Vercel deployment URLs (always allow these)
   const vercelUrls = [
     'https://marines-v9gg.vercel.app',
     'https://marines-app-frontend.vercel.app',
@@ -52,6 +52,7 @@ const getAllowedOrigins = () => {
     origins.push('http://localhost:5173'); // Vite default port
   }
   
+  console.log(`[CORS] Allowed origins: ${origins.join(', ')}`);
   return origins.length > 0 ? origins : ['http://localhost:3000'];
 };
 
@@ -61,30 +62,54 @@ const corsOptions = {
     
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) {
+      console.log('[CORS] Request with no origin - allowing');
       return callback(null, true);
     }
     
     if (allowedOrigins.includes(origin)) {
+      console.log(`[CORS] Allowing origin: ${origin}`);
       callback(null, true);
     } else {
-      console.warn(`CORS blocked origin: ${origin}`);
-      console.warn(`Allowed origins: ${allowedOrigins.join(', ')}`);
-      callback(new Error('Not allowed by CORS'));
+      console.warn(`[CORS] Blocked origin: ${origin}`);
+      console.warn(`[CORS] Allowed origins: ${allowedOrigins.join(', ')}`);
+      // In production, be strict; in dev, be more permissive
+      if (process.env.NODE_ENV === 'production') {
+        callback(new Error('Not allowed by CORS'));
+      } else {
+        // Allow in development for easier debugging
+        console.warn('[CORS] Development mode - allowing anyway');
+        callback(null, true);
+      }
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
   exposedHeaders: ['Content-Range', 'X-Content-Range'],
   preflightContinue: false,
-  optionsSuccessStatus: 204, // Some legacy browsers (IE11, various SmartTVs) choke on 204
+  optionsSuccessStatus: 200, // Use 200 instead of 204 for better compatibility
 };
 
-// Apply CORS middleware
+// Apply CORS middleware BEFORE any other middleware
 app.use(cors(corsOptions));
 
-// Explicitly handle OPTIONS requests for all routes (additional safety)
-app.options('*', cors(corsOptions));
+// Explicitly handle OPTIONS requests for all routes (critical for preflight)
+// This ensures preflight requests are handled even if cors middleware doesn't catch them
+app.options('*', cors(corsOptions), (req, res) => {
+  console.log(`[CORS] Handling OPTIONS preflight for: ${req.path} from origin: ${req.headers.origin}`);
+  // The cors middleware should have already set headers, but ensure they're set
+  const origin = req.headers.origin;
+  const allowedOrigins = getAllowedOrigins();
+  
+  if (origin && allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Max-Age', '86400'); // Cache preflight for 24 hours
+  }
+  res.sendStatus(200);
+});
 app.use(express.json());
 
 // Request logging middleware
