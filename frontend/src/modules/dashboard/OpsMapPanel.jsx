@@ -38,6 +38,52 @@ function createVesselIcon(status, size = 20) {
   });
 }
 
+// Normalize and validate vessel position coordinates
+// Same logic as MapView component to ensure consistent plotting
+function normalizeVesselPosition(position) {
+  if (!position) return null;
+  
+  // Extract coordinates from various field name formats
+  const rawLat = position.lat || position.Lat || position.latitude || position.Latitude || null;
+  const rawLon = position.lon || position.Lon || position.longitude || position.Longitude || null;
+  
+  if (!rawLat || !rawLon) return null;
+  
+  // Convert to numbers if they're strings
+  let normalizedLat = typeof rawLat === 'string' ? parseFloat(rawLat) : rawLat;
+  let normalizedLon = typeof rawLon === 'string' ? parseFloat(rawLon) : rawLon;
+  
+  // Validate coordinates are valid numbers
+  if (isNaN(normalizedLat) || isNaN(normalizedLon)) {
+    return null;
+  }
+  
+  // Check if coordinates might be swapped (lat > 90 or lat < -90, or lon within lat range)
+  if ((normalizedLat > 90 || normalizedLat < -90) && (normalizedLon >= -90 && normalizedLon <= 90)) {
+    // Coordinates appear to be swapped - swap them back
+    console.warn('[OpsMapPanel] Coordinates appear to be swapped, correcting:', { 
+      original: { lat: normalizedLat, lon: normalizedLon },
+      vesselName: position.vesselName || 'Unknown',
+    });
+    [normalizedLat, normalizedLon] = [normalizedLon, normalizedLat];
+  }
+  
+  // Final validation - ensure coordinates are within valid ranges
+  if (normalizedLat < -90 || normalizedLat > 90 || normalizedLon < -180 || normalizedLon > 180) {
+    console.error('[OpsMapPanel] Invalid coordinate ranges:', { 
+      lat: normalizedLat, 
+      lon: normalizedLon,
+      vesselName: position.vesselName || 'Unknown',
+    });
+    return null;
+  }
+  
+  return {
+    lat: normalizedLat,
+    lon: normalizedLon,
+  };
+}
+
 function OpsMapPanel({ vessels, geofences, opsSites, onVesselClick }) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
@@ -336,10 +382,25 @@ function OpsMapPanel({ vessels, geofences, opsSites, onVesselClick }) {
       const bounds = [];
       
       vessels.forEach((vessel) => {
-        if (!vessel.position || !vessel.position.lat || !vessel.position.lon) return;
+        if (!vessel.position) return;
+        
+        // Normalize and validate coordinates (same logic as MapView)
+        const normalizedPos = normalizeVesselPosition({
+          ...vessel.position,
+          vesselName: vessel.name, // For logging
+        });
+        
+        if (!normalizedPos) {
+          console.warn('[OpsMapPanel] Skipping vessel due to invalid coordinates:', {
+            vesselId: vessel.id,
+            vesselName: vessel.name,
+            position: vessel.position,
+          });
+          return;
+        }
 
         const icon = createVesselIcon(vessel.status, 16);
-        const marker = L.marker([vessel.position.lat, vessel.position.lon], { icon })
+        const marker = L.marker([normalizedPos.lat, normalizedPos.lon], { icon })
           .addTo(map);
 
         // Create tooltip content for hover (shows on mouseover)
@@ -367,9 +428,9 @@ function OpsMapPanel({ vessels, geofences, opsSites, onVesselClick }) {
                 <span style="color: #f1f5f9; font-weight: 500;">${vessel.position.cog.toFixed(0)}°</span>
               ` : ''}
               <span style="color: #94a3b8;">Lat:</span>
-              <span style="color: #f1f5f9; font-weight: 500;">${vessel.position.lat.toFixed(6)}</span>
+              <span style="color: #f1f5f9; font-weight: 500;">${normalizedPos.lat.toFixed(6)}</span>
               <span style="color: #94a3b8;">Long:</span>
-              <span style="color: #f1f5f9; font-weight: 500;">${vessel.position.lon.toFixed(6)}</span>
+              <span style="color: #f1f5f9; font-weight: 500;">${normalizedPos.lon.toFixed(6)}</span>
               ${vessel.portCall?.port?.name ? `
                 <span style="color: #94a3b8;">Port:</span>
                 <span style="color: #f1f5f9; font-weight: 500;">${vessel.portCall.port.name}</span>
@@ -395,8 +456,10 @@ function OpsMapPanel({ vessels, geofences, opsSites, onVesselClick }) {
             <strong>${vessel.name}</strong><br/>
             <small>${vessel.imo || 'N/A'}</small><br/>
             Status: ${vessel.status}<br/>
-            ${vessel.position.sog ? `SOG: ${vessel.position.sog.toFixed(1)} kn<br/>` : ''}
-            ${vessel.position.cog ? `COG: ${vessel.position.cog.toFixed(0)}°<br/>` : ''}
+            ${vessel.position?.sog ? `SOG: ${vessel.position.sog.toFixed(1)} kn<br/>` : ''}
+            ${vessel.position?.cog ? `COG: ${vessel.position.cog.toFixed(0)}°<br/>` : ''}
+            Lat: ${normalizedPos.lat.toFixed(6)}<br/>
+            Lon: ${normalizedPos.lon.toFixed(6)}<br/>
             ${vessel.portCall ? `<br/>Port: ${vessel.portCall.port?.name || 'N/A'}` : ''}
           </div>
         `;
@@ -408,7 +471,7 @@ function OpsMapPanel({ vessels, geofences, opsSites, onVesselClick }) {
         });
 
         markersRef.current[vessel.id] = marker;
-        bounds.push([vessel.position.lat, vessel.position.lon]);
+        bounds.push([normalizedPos.lat, normalizedPos.lon]);
       });
 
       // Only auto-fit bounds on initial load, not after user has interacted with the map
