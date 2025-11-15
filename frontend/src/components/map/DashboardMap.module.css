@@ -1,0 +1,113 @@
+.dashboardMap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.map {
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+.layerSwitcher {
+  position: absolute;
+  top: 60px;
+  right: 20px;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 8px;
+  padding: 12px;
+  z-index: 1000;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10px);
+  min-width: 140px;
+}
+
+.layerSwitcherHeader {
+  font-size: 12px;
+  font-weight: 600;
+  color: #94a3b8;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.layerButtons {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.layerButton {
+  padding: 8px 12px;
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 6px;
+  color: #f1f5f9;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+}
+
+.layerButton:hover {
+  background: rgba(30, 41, 59, 0.95);
+  border-color: rgba(148, 163, 184, 0.4);
+}
+
+.layerButton.active {
+  background: #3b82f6;
+  border-color: #2563eb;
+  color: white;
+}
+
+.popupBackdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1999;
+  background: rgba(0, 0, 0, 0.1);
+  pointer-events: auto;
+  cursor: default;
+}
+
+.popupContainer {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2000;
+  pointer-events: none;
+  max-width: 90vw;
+  max-height: 90vh;
+}
+
+.popupContainer > * {
+  pointer-events: auto;
+}
+
+/* Vessel marker tooltip styling */
+:global(.vessel-tooltip) {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+:global(.vessel-tooltip .leaflet-tooltip-content-wrapper) {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+:global(.vessel-tooltip .leaflet-tooltip-content) {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
