@@ -11,7 +11,6 @@ import styles from './VesselSearch.module.css';
 
 interface VesselSearchProps {
   onSelectVessel: (vessel: VesselSearchResult) => void;
-  apiKey?: string;
 }
 
 export function VesselSearch({ onSelectVessel }: VesselSearchProps) {
