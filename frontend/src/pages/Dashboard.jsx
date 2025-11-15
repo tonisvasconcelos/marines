@@ -19,11 +19,21 @@ function Dashboard() {
     refetchInterval: 30000, // Refresh every 30 seconds
   });
 
-  const { data: activeVessels, isLoading: vesselsLoading } = useQuery({
+  const { data: activeVessels, isLoading: vesselsLoading, error: vesselsError } = useQuery({
     queryKey: ['dashboard', 'active-vessels'],
     queryFn: () => api.get('/dashboard/active-vessels'),
     refetchInterval: 30000, // Refresh every 30 seconds
   });
+
+  // Debug logging
+  if (import.meta.env.DEV) {
+    console.log('[Dashboard] Active vessels:', {
+      activeVessels,
+      isLoading: vesselsLoading,
+      error: vesselsError,
+      count: activeVessels?.length,
+    });
+  }
 
   const { data: events, isLoading: eventsLoading } = useQuery({
     queryKey: ['dashboard', 'events'],

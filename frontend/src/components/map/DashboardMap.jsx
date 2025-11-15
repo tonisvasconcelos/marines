@@ -196,7 +196,24 @@ function DashboardMap({ vessels, geofences, opsSites, onVesselClick }) {
 
   // Update vessel markers
   useEffect(() => {
-    if (!mapInstanceRef.current || !vessels) return;
+    if (!mapInstanceRef.current) return;
+    
+    // Debug logging
+    if (import.meta.env.DEV) {
+      console.log('[DashboardMap] Vessels data:', {
+        vessels,
+        vesselsLength: vessels?.length,
+        vesselsType: Array.isArray(vessels) ? 'array' : typeof vessels,
+        firstVessel: vessels?.[0],
+      });
+    }
+
+    if (!vessels || !Array.isArray(vessels) || vessels.length === 0) {
+      if (import.meta.env.DEV) {
+        console.warn('[DashboardMap] No vessels to plot:', { vessels });
+      }
+      return;
+    }
 
     const map = mapInstanceRef.current;
 
@@ -209,9 +226,26 @@ function DashboardMap({ vessels, geofences, opsSites, onVesselClick }) {
     // Add vessel markers with full-precision coordinates
     const bounds = [];
     const zoom = map.getZoom();
+    let plottedCount = 0;
+    let skippedCount = 0;
 
     vessels.forEach((vessel) => {
-      if (!vessel.position) return;
+      if (!vessel) {
+        skippedCount++;
+        return;
+      }
+
+      if (!vessel.position) {
+        if (import.meta.env.DEV) {
+          console.warn('[DashboardMap] Vessel missing position:', {
+            vesselId: vessel.id,
+            vesselName: vessel.name,
+            vessel,
+          });
+        }
+        skippedCount++;
+        return;
+      }
 
       // Normalize coordinates (preserves full precision)
       const normalizedPos = normalizeVesselPosition({
@@ -219,7 +253,17 @@ function DashboardMap({ vessels, geofences, opsSites, onVesselClick }) {
         vesselName: vessel.name,
       });
 
-      if (!normalizedPos) return;
+      if (!normalizedPos) {
+        if (import.meta.env.DEV) {
+          console.warn('[DashboardMap] Failed to normalize position:', {
+            vesselId: vessel.id,
+            vesselName: vessel.name,
+            position: vessel.position,
+          });
+        }
+        skippedCount++;
+        return;
+      }
 
       // CRITICAL: Use full-precision coordinates for marker
       const lat = normalizedPos.lat;
@@ -276,7 +320,18 @@ function DashboardMap({ vessels, geofences, opsSites, onVesselClick }) {
       marker.addTo(map);
       markersRef.current[vessel.id] = marker;
       bounds.push([lat, lon]);
+      plottedCount++;
     });
+
+    // Debug logging
+    if (import.meta.env.DEV) {
+      console.log('[DashboardMap] Vessel markers plotted:', {
+        total: vessels.length,
+        plotted: plottedCount,
+        skipped: skippedCount,
+        bounds: bounds.length,
+      });
+    }
 
     // Auto-fit bounds on initial load
     if (bounds.length > 0 && !hasUserInteractedRef.current && !initialBoundsSetRef.current) {
