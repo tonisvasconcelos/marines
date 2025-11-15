@@ -81,7 +81,17 @@ router.get('/stats', (req, res) => {
 // GET /api/dashboard/active-vessels - Get all active vessels with positions
 router.get('/active-vessels', async (req, res) => {
   const { tenantId } = req;
-  const vessels = getMockVessels(tenantId);
+  
+  // Use database with fallback to mock data (consistent with other routes)
+  const { getVessels } = await import('../db/vessels.js');
+  let vessels;
+  try {
+    vessels = await getVessels(tenantId);
+  } catch (error) {
+    console.warn('Error fetching vessels for dashboard, using mock data:', error);
+    vessels = getMockVessels(tenantId);
+  }
+  
   const portCalls = getMockPortCalls(tenantId);
   const aisConfig = getAisConfig(tenantId);
   

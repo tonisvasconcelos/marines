@@ -93,29 +93,76 @@ export async function getVesselById(vesselId, tenantId) {
       'SELECT * FROM vessels WHERE id = $1 AND tenant_id = $2',
       [vesselId, tenantId]
     );
-    if (result.rows.length === 0) return null;
-    const row = result.rows[0];
-    // Transform database column names to camelCase
-    return {
-      id: row.id,
-      tenantId: row.tenant_id,
-      name: row.name,
-      imo: row.imo,
-      mmsi: row.mmsi,
-      callSign: row.call_sign,
-      flag: row.flag,
-      type: row.type,
-      length: row.length,
-      width: row.width,
-      draft: row.draft,
-      grossTonnage: row.gross_tonnage,
-      netTonnage: row.net_tonnage,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    };
+    
+    // If vessel found in database, return it
+    if (result.rows.length > 0) {
+      const row = result.rows[0];
+      // Transform database column names to camelCase
+      return {
+        id: row.id,
+        tenantId: row.tenant_id,
+        name: row.name,
+        imo: row.imo,
+        mmsi: row.mmsi,
+        callSign: row.call_sign,
+        flag: row.flag,
+        type: row.type,
+        length: row.length,
+        width: row.width,
+        draft: row.draft,
+        grossTonnage: row.gross_tonnage,
+        netTonnage: row.net_tonnage,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      };
+    }
+    
+    // Vessel not found in database - check if it's a connection/table error or just not found
+    // Check if error is about missing table (table doesn't exist yet)
+    const isTableMissing = error?.message?.includes('relation') || 
+                          error?.message?.includes('does not exist') ||
+                          error?.code === '42P01'; // PostgreSQL error code for "relation does not exist"
+    
+    // Check if it's a connection error
+    const isConnectionError = error?.message?.includes('ECONNREFUSED') ||
+                            error?.message?.includes('connection') ||
+                            error?.code === 'ECONNREFUSED';
+    
+    // If table exists but vessel not found, still try mock data fallback
+    // This handles the case where dashboard returns mock vessels but database is empty
+    const { getMockVessels } = await import('../data/mockData.js');
+    const mockVessels = getMockVessels(tenantId);
+    const mockVessel = mockVessels.find(v => v.id === vesselId);
+    
+    if (mockVessel) {
+      console.log(`[getVesselById] Vessel ${vesselId} not found in database, using mock data fallback`);
+      return mockVessel;
+    }
+    
+    // Vessel not found in database or mock data
+    return null;
   } catch (error) {
     console.error('Error fetching vessel from database:', error);
-    // Fallback to mock data
+    
+    // Check if error is about missing table (table doesn't exist yet)
+    const isTableMissing = error.message?.includes('relation') || 
+                          error.message?.includes('does not exist') ||
+                          error.code === '42P01'; // PostgreSQL error code for "relation does not exist"
+    
+    // Check if it's a connection error
+    const isConnectionError = error.message?.includes('ECONNREFUSED') ||
+                            error.message?.includes('connection') ||
+                            error.code === 'ECONNREFUSED';
+    
+    // Fallback to mock data if table missing or connection error
+    if (isTableMissing || isConnectionError) {
+      console.warn('Database table missing or connection error, falling back to mock data');
+      const { getMockVessels } = await import('../data/mockData.js');
+      const vessels = getMockVessels(tenantId);
+      return vessels.find(v => v.id === vesselId) || null;
+    }
+    
+    // For other errors, still try mock data as fallback
     const { getMockVessels } = await import('../data/mockData.js');
     const vessels = getMockVessels(tenantId);
     return vessels.find(v => v.id === vesselId) || null;
