@@ -50,9 +50,29 @@ export async function getVessels(tenantId) {
     }));
   } catch (error) {
     console.error('Error fetching vessels from database:', error);
-    // Fallback to mock data if database fails
-    const { getMockVessels } = await import('../data/mockData.js');
-    return getMockVessels(tenantId);
+    
+    // Check if error is about missing table (table doesn't exist yet)
+    const isTableMissing = error.message?.includes('relation') || 
+                          error.message?.includes('does not exist') ||
+                          error.code === '42P01'; // PostgreSQL error code for "relation does not exist"
+    
+    // Check if it's a connection error
+    const isConnectionError = error.message?.includes('ECONNREFUSED') ||
+                              error.message?.includes('connection') ||
+                              error.code === 'ECONNREFUSED';
+    
+    // Only fall back to mock data if table doesn't exist or connection fails
+    // If table exists but is empty, return empty array (don't fall back)
+    if (isTableMissing || isConnectionError) {
+      console.warn('Database table missing or connection error, falling back to mock data');
+      const { getMockVessels } = await import('../data/mockData.js');
+      return getMockVessels(tenantId);
+    }
+    
+    // For other errors (permissions, etc.), return empty array
+    // This prevents re-initializing mock data when database is properly set up but empty
+    console.warn('Database query error, returning empty array (not falling back to mock):', error.message);
+    return [];
   }
 }
 

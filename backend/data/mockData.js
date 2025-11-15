@@ -2,6 +2,7 @@
 
 let mockPortCalls = [];
 let mockVessels = [];
+let mockVesselsInitialized = false; // Track if default vessels have been initialized
 let mockAisPositions = {};
 let mockPositionHistory = []; // Array of position records: { id, vesselId, tenantId, lat, lon, timestamp, sog, cog, heading, navStatus, source }
 let mockOpsSites = [];
@@ -34,7 +35,9 @@ export function getMockUsers() {
 }
 
 export function getMockVessels(tenantId) {
-  if (mockVessels.length === 0) {
+  // Only initialize default vessels once, on first call
+  // After that, if vessels are deleted, don't re-initialize them
+  if (!mockVesselsInitialized && mockVessels.length === 0) {
     mockVessels = [
       {
         id: 'vessel-1',
@@ -55,6 +58,7 @@ export function getMockVessels(tenantId) {
         flag: 'US',
       },
     ];
+    mockVesselsInitialized = true;
   }
   return mockVessels.filter((v) => v.tenantId === tenantId);
 }
