@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import 'leaflet.gridlayer.googlemutant';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useI18n } from '../../utils/useI18n';
 import { api } from '../../utils/api';
@@ -62,16 +63,77 @@ function OpsMapPanel({ vessels, geofences, opsSites, onVesselClick }) {
   useEffect(() => {
     if (!mapRef.current) return;
 
-    if (!mapInstanceRef.current) {
+    const initializeMap = () => {
+      if (mapInstanceRef.current) return;
+
       mapInstanceRef.current = L.map(mapRef.current, {
         zoomControl: true,
         attributionControl: true,
       }).setView([-22.9068, -43.1729], 6);
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '© OpenStreetMap contributors © CARTO',
-        maxZoom: 19,
-      }).addTo(mapInstanceRef.current);
+      // Use Google Maps if API key is available, otherwise fall back to OpenStreetMap
+      const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+      
+      if (googleMapsApiKey) {
+        // Check if Google Maps API is already loaded
+        if (window.google && window.google.maps) {
+          // Use Google Maps with Leaflet plugin
+          try {
+            L.gridLayer.googleMutant({
+              type: 'roadmap', // Options: 'roadmap', 'satellite', 'hybrid', 'terrain'
+              maxZoom: 19,
+            }).addTo(mapInstanceRef.current);
+            return;
+          } catch (error) {
+            console.warn('Failed to initialize Google Maps, falling back to OpenStreetMap:', error);
+            loadOpenStreetMap();
+            return;
+          }
+        } else {
+          // Load Google Maps API script
+          const script = document.createElement('script');
+          script.src = `https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}`;
+          script.async = true;
+          script.defer = true;
+          script.onload = () => {
+            // Wait a bit for the plugin to be ready
+            setTimeout(() => {
+              try {
+                if (mapInstanceRef.current) {
+                  L.gridLayer.googleMutant({
+                    type: 'roadmap',
+                    maxZoom: 19,
+                  }).addTo(mapInstanceRef.current);
+                }
+              } catch (error) {
+                console.warn('Failed to load Google Maps, falling back to OpenStreetMap:', error);
+                loadOpenStreetMap();
+              }
+            }, 100);
+          };
+          script.onerror = () => {
+            console.warn('Failed to load Google Maps API, falling back to OpenStreetMap');
+            loadOpenStreetMap();
+          };
+          document.head.appendChild(script);
+          return;
+        }
+      }
+      
+      // Fallback to OpenStreetMap
+      loadOpenStreetMap();
+    };
+
+    const loadOpenStreetMap = () => {
+      if (mapInstanceRef.current) {
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap contributors',
+          maxZoom: 19,
+        }).addTo(mapInstanceRef.current);
+      }
+    };
+
+    initializeMap();
 
       const map = mapInstanceRef.current;
 

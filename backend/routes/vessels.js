@@ -1,13 +1,12 @@
 import express from 'express';
-import { getMockVessels } from '../data/mockData.js';
 import * as myshiptracking from '../services/myshiptracking.js';
 import { getAisConfig } from '../services/aisConfig.js';
 import {
   getCustomersByVessel,
   createVesselCustomerAssociation,
   deleteVesselCustomerAssociation,
-  deleteMockVessel,
 } from '../data/mockData.js';
+import * as vesselDb from '../db/vessels.js';
 
 const router = express.Router();
 
@@ -19,9 +18,8 @@ router.get('/', async (req, res) => {
   
   if (aisConfig?.provider === 'myshiptracking' && aisConfig?.apiKey) {
     try {
-      // For now, return mock vessels but enrich with AIS data
-      // In production, you might want to sync vessels from MyShipTracking
-      const vessels = getMockVessels(tenantId);
+      // Get vessels from database (with fallback to mock data)
+      const vessels = await vesselDb.getVessels(tenantId);
       
       // Enrich each vessel with data from MyShipTracking if MMSI is available
       const enrichedVessels = await Promise.all(
@@ -59,9 +57,14 @@ router.get('/', async (req, res) => {
     }
   }
   
-  // Fallback to mock data
-  const vessels = getMockVessels(tenantId);
-  res.json(vessels);
+  try {
+    // Get vessels from database (with fallback to mock data)
+    const vessels = await vesselDb.getVessels(tenantId);
+    res.json(vessels);
+  } catch (error) {
+    console.error('Error fetching vessels:', error);
+    res.status(500).json({ message: 'Failed to fetch vessels' });
+  }
 });
 
 // GET /api/vessels/preview-position - Get position preview by IMO or MMSI (for form)
@@ -141,53 +144,60 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ message: 'Vessel name is required' });
   }
   
-  // In production, create vessel in DB
-  // For now, use mock data
-  const { createMockVessel } = await import('../data/mockData.js');
-  const newVessel = createMockVessel(tenantId, {
-    name,
-    imo,
-    mmsi,
-    callSign,
-    flag,
-  });
-  
-  // Try to enrich with MyShipTracking data if IMO or MMSI is provided
-  const aisConfig = getAisConfig(tenantId);
-  
-  if (aisConfig?.provider === 'myshiptracking' && aisConfig?.apiKey) {
-    try {
-      let aisData = null;
-      if (mmsi) {
-        aisData = await myshiptracking.getVesselByMmsi(
-          mmsi,
-          aisConfig.apiKey,
-          aisConfig.secretKey
-        );
-      } else if (imo) {
-        // Remove 'IMO' prefix if present
-        const imoNumber = imo.replace(/^IMO/i, '').trim();
-        aisData = await myshiptracking.getVesselByImo(
-          imoNumber,
-          aisConfig.apiKey,
-          aisConfig.secretKey
-        );
+  try {
+    // Create vessel in database (with fallback to mock data)
+    let newVessel = await vesselDb.createVessel(tenantId, {
+      name,
+      imo,
+      mmsi,
+      callSign,
+      flag,
+    });
+    
+    // Try to enrich with MyShipTracking data if IMO or MMSI is provided
+    const aisConfig = getAisConfig(tenantId);
+    
+    if (aisConfig?.provider === 'myshiptracking' && aisConfig?.apiKey) {
+      try {
+        let aisData = null;
+        if (mmsi) {
+          aisData = await myshiptracking.getVesselByMmsi(
+            mmsi,
+            aisConfig.apiKey,
+            aisConfig.secretKey
+          );
+        } else if (imo) {
+          // Remove 'IMO' prefix if present
+          const imoNumber = imo.replace(/^IMO/i, '').trim();
+          aisData = await myshiptracking.getVesselByImo(
+            imoNumber,
+            aisConfig.apiKey,
+            aisConfig.secretKey
+          );
+        }
+        
+        if (aisData) {
+          // Update vessel with AIS data if we have additional fields
+          // For now, just merge the data in the response
+          newVessel = {
+            ...newVessel,
+            ...aisData,
+            // Preserve our internal IDs
+            id: newVessel.id,
+            tenantId: newVessel.tenantId,
+          };
+        }
+      } catch (error) {
+        console.error('Failed to fetch AIS data for new vessel:', error);
+        // Continue without AIS enrichment
       }
-      
-      if (aisData) {
-        // Merge AIS data
-        Object.assign(newVessel, aisData);
-        // Preserve our internal IDs
-        newVessel.id = newVessel.id;
-        newVessel.tenantId = tenantId;
-      }
-    } catch (error) {
-      console.error('Failed to fetch AIS data for new vessel:', error);
-      // Continue without AIS enrichment
     }
+    
+    res.status(201).json(newVessel);
+  } catch (error) {
+    console.error('Error creating vessel:', error);
+    res.status(500).json({ message: 'Failed to create vessel' });
   }
-  
-  res.status(201).json(newVessel);
 });
 
 // GET /api/vessels/:id/customers - Get customers associated with vessel
@@ -239,89 +249,92 @@ router.get('/:id/position', async (req, res) => {
   const { tenantId } = req;
   const { id } = req.params;
   
-  const vessels = getMockVessels(tenantId);
-  const vessel = vessels.find((v) => v.id === id && v.tenantId === tenantId);
-  
-  if (!vessel) {
-    return res.status(404).json({ message: 'Vessel not found' });
-  }
-  
-  const aisConfig = getAisConfig(tenantId);
-  
-  // Try to get position from AIS provider if configured
-  if (aisConfig?.provider === 'myshiptracking' && aisConfig?.apiKey) {
-    try {
-      let position = null;
-      
-      if (vessel.mmsi) {
-        position = await myshiptracking.getVesselPosition(
-          vessel.mmsi,
-          aisConfig.apiKey,
-          aisConfig.secretKey
-        );
-      } else if (vessel.imo) {
-        // Remove 'IMO' prefix if present
-        const imoNumber = vessel.imo.replace(/^IMO/i, '').trim();
-        position = await myshiptracking.getVesselByImo(
-          imoNumber,
-          aisConfig.apiKey,
-          aisConfig.secretKey
-        );
-      }
-      
-      if (position && (position.latitude || position.lat)) {
-        // Transform MyShipTracking response to our format
-        const positionData = {
-          lat: position.latitude || position.lat,
-          lon: position.longitude || position.lon,
-          timestamp: position.timestamp || position.last_position_time || new Date().toISOString(),
-          sog: position.speed || position.sog,
-          cog: position.course || position.cog,
-          heading: position.heading,
-          navStatus: position.nav_status || position.status,
-          source: 'myshiptracking',
-        };
+  try {
+    const vessel = await vesselDb.getVesselById(id, tenantId);
+    
+    if (!vessel) {
+      return res.status(404).json({ message: 'Vessel not found' });
+    }
+    
+    const aisConfig = getAisConfig(tenantId);
+    
+    // Try to get position from AIS provider if configured
+    if (aisConfig?.provider === 'myshiptracking' && aisConfig?.apiKey) {
+      try {
+        let position = null;
         
-        // Store position in history
-        try {
-          const { storePositionHistory } = await import('../data/mockData.js');
-          storePositionHistory(id, tenantId, positionData);
-        } catch (error) {
-          console.error('Failed to store position history:', error);
-          // Don't fail the request if history storage fails
+        if (vessel.mmsi) {
+          position = await myshiptracking.getVesselPosition(
+            vessel.mmsi,
+            aisConfig.apiKey,
+            aisConfig.secretKey
+          );
+        } else if (vessel.imo) {
+          // Remove 'IMO' prefix if present
+          const imoNumber = vessel.imo.replace(/^IMO/i, '').trim();
+          position = await myshiptracking.getVesselByImo(
+            imoNumber,
+            aisConfig.apiKey,
+            aisConfig.secretKey
+          );
         }
         
-        res.json(positionData);
-        return;
+        if (position && (position.latitude || position.lat)) {
+          // Transform MyShipTracking response to our format
+          const positionData = {
+            lat: position.latitude || position.lat,
+            lon: position.longitude || position.lon,
+            timestamp: position.timestamp || position.last_position_time || new Date().toISOString(),
+            sog: position.speed || position.sog,
+            cog: position.course || position.cog,
+            heading: position.heading,
+            navStatus: position.nav_status || position.status,
+            source: 'myshiptracking',
+          };
+          
+          // Store position in history (database with fallback to mock)
+          try {
+            await vesselDb.storePositionHistory(id, tenantId, positionData);
+          } catch (error) {
+            console.error('Failed to store position history:', error);
+            // Don't fail the request if history storage fails
+          }
+          
+          res.json(positionData);
+          return;
+        }
+      } catch (error) {
+        // Log error but fall back to mock data instead of returning 500
+        console.warn(`Failed to fetch vessel position from AIS provider:`, error.message);
+        console.log('Falling back to mock AIS data');
+        // Continue to fallback below
       }
-    } catch (error) {
-      // Log error but fall back to mock data instead of returning 500
-      console.warn(`Failed to fetch vessel position from AIS provider:`, error.message);
-      console.log('Falling back to mock AIS data');
-      // Continue to fallback below
     }
-  }
-  
-  // Fallback to mock data (if AIS provider not configured, failed, or returned no data)
-  const { getMockAisPosition, storePositionHistory } = await import('../data/mockData.js');
-  const mockPosition = getMockAisPosition(id);
-  
-  // Ensure mock position has tenantId for consistency
-  if (mockPosition && !mockPosition.tenantId) {
-    mockPosition.tenantId = tenantId;
-  }
-  
-  // Store position in history (only if we have valid coordinates)
-  if (mockPosition && (mockPosition.lat || mockPosition.Lat) && (mockPosition.lon || mockPosition.Lon)) {
-    try {
-      storePositionHistory(id, tenantId, mockPosition);
-    } catch (error) {
-      console.error('Failed to store position history:', error);
-      // Don't fail the request if history storage fails
+    
+    // Fallback to mock data (if AIS provider not configured, failed, or returned no data)
+    const { getMockAisPosition } = await import('../data/mockData.js');
+    const mockPosition = getMockAisPosition(id);
+    
+    // Ensure mock position has tenantId for consistency
+    if (mockPosition && !mockPosition.tenantId) {
+      mockPosition.tenantId = tenantId;
     }
+    
+    // Store position in history (database with fallback to mock)
+    if (mockPosition && (mockPosition.lat || mockPosition.Lat) && (mockPosition.lon || mockPosition.Lon)) {
+      try {
+        await vesselDb.storePositionHistory(id, tenantId, mockPosition);
+      } catch (error) {
+        console.error('Failed to store position history:', error);
+        // Don't fail the request if history storage fails
+      }
+    }
+    
+    res.json(mockPosition);
+  } catch (error) {
+    console.error('Error fetching vessel position:', error);
+    res.status(500).json({ message: 'Failed to fetch vessel position' });
   }
-  
-  res.json(mockPosition);
 });
 
 // GET /api/vessels/:id/position-history - Get vessel position history
@@ -330,29 +343,33 @@ router.get('/:id/position-history', async (req, res) => {
   const { id } = req.params;
   const limit = parseInt(req.query.limit) || 100;
   
-  const vessels = getMockVessels(tenantId);
-  const vessel = vessels.find((v) => v.id === id && v.tenantId === tenantId);
-  
-  if (!vessel) {
-    return res.status(404).json({ message: 'Vessel not found' });
+  try {
+    const vessel = await vesselDb.getVesselById(id, tenantId);
+    
+    if (!vessel) {
+      return res.status(404).json({ message: 'Vessel not found' });
+    }
+    
+    // Get position history from database (with fallback to mock data)
+    const history = await vesselDb.getPositionHistory(id, tenantId, limit);
+    
+    res.json(history);
+  } catch (error) {
+    console.error('Error fetching position history:', error);
+    res.status(500).json({ message: 'Failed to fetch position history' });
   }
-  
-  const { getPositionHistory } = await import('../data/mockData.js');
-  const history = getPositionHistory(id, tenantId, limit);
-  
-  res.json(history);
 });
 
 router.get('/:id', async (req, res) => {
   const { tenantId } = req;
   const { id } = req.params;
   
-  const vessels = getMockVessels(tenantId);
-  let vessel = vessels.find((v) => v.id === id && v.tenantId === tenantId);
-  
-  if (!vessel) {
-    return res.status(404).json({ message: 'Vessel not found' });
-  }
+  try {
+    let vessel = await vesselDb.getVesselById(id, tenantId);
+    
+    if (!vessel) {
+      return res.status(404).json({ message: 'Vessel not found' });
+    }
   
   // Try to enrich with MyShipTracking data
   const aisConfig = getAisConfig(tenantId);
@@ -400,20 +417,26 @@ router.delete('/:id', async (req, res) => {
   const { tenantId } = req;
   const { id } = req.params;
   
-  const vessels = getMockVessels(tenantId);
-  const vessel = vessels.find((v) => v.id === id && v.tenantId === tenantId);
-  
-  if (!vessel) {
-    return res.status(404).json({ message: 'Vessel not found' });
+  try {
+    // Check if vessel exists
+    const vessel = await vesselDb.getVesselById(id, tenantId);
+    
+    if (!vessel) {
+      return res.status(404).json({ message: 'Vessel not found' });
+    }
+    
+    // Delete vessel from database (with fallback to mock data)
+    const deleted = await vesselDb.deleteVessel(id, tenantId);
+    
+    if (!deleted) {
+      return res.status(500).json({ message: 'Failed to delete vessel' });
+    }
+    
+    res.json({ message: 'Vessel deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting vessel:', error);
+    res.status(500).json({ message: 'Failed to delete vessel' });
   }
-  
-  const deleted = deleteMockVessel(id, tenantId);
-  
-  if (!deleted) {
-    return res.status(500).json({ message: 'Failed to delete vessel' });
-  }
-  
-  res.json({ message: 'Vessel deleted successfully' });
 });
 
 export default router;
