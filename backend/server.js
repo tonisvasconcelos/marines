@@ -20,6 +20,31 @@ const app = express();
 // Parse PORT as integer, default to 3001
 const PORT = parseInt(process.env.PORT, 10) || 3001;
 
+// CRITICAL: Handle OPTIONS requests FIRST, before any other middleware
+// This must be the very first handler to catch preflight requests
+app.options('*', (req, res) => {
+  const origin = req.headers.origin;
+  
+  console.log(`[CORS] OPTIONS preflight intercepted for: ${req.path}`);
+  console.log(`[CORS] Origin: ${origin}`);
+  
+  // Always set CORS headers for preflight - temporarily allow all origins for debugging
+  if (origin) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Max-Age', '86400');
+    console.log(`[CORS] Preflight headers set for origin: ${origin}`);
+  } else {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+  }
+  
+  return res.status(200).end();
+});
+
 // CORS configuration
 // Support multiple frontend URLs (for production, preview, and local dev)
 const getAllowedOrigins = () => {
@@ -90,48 +115,8 @@ const corsOptions = {
   optionsSuccessStatus: 200, // Use 200 instead of 204 for better compatibility
 };
 
-// Apply CORS middleware BEFORE any other middleware
+// Apply CORS middleware for all other requests
 app.use(cors(corsOptions));
-
-// Explicitly handle OPTIONS requests for all routes (critical for preflight)
-// This MUST be before any route handlers and must always respond with proper headers
-app.options('*', (req, res) => {
-  const origin = req.headers.origin;
-  const allowedOrigins = getAllowedOrigins();
-  
-  console.log(`[CORS] OPTIONS preflight for: ${req.path}`);
-  console.log(`[CORS] Origin: ${origin}`);
-  console.log(`[CORS] Allowed origins: ${allowedOrigins.join(', ')}`);
-  
-  // Always set CORS headers for preflight, even if origin check fails (for debugging)
-  if (origin && allowedOrigins.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin);
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Max-Age', '86400'); // Cache preflight for 24 hours
-    console.log(`[CORS] Preflight allowed for origin: ${origin}`);
-  } else if (origin) {
-    // Log blocked origin
-    console.warn(`[CORS] Preflight blocked for origin: ${origin}`);
-    console.warn(`[CORS] This origin is not in the allowed list. Check Railway environment variables.`);
-    // TEMPORARILY: Allow all origins in preflight to debug (remove after fixing)
-    // This ensures we can see if the issue is origin checking or something else
-    res.header('Access-Control-Allow-Origin', origin);
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-    res.header('Access-Control-Allow-Credentials', 'true');
-    console.warn(`[CORS] TEMPORARILY allowing preflight for debugging - FIX THIS IN PRODUCTION`);
-  } else {
-    // No origin header (e.g., same-origin request or mobile app)
-    console.log(`[CORS] Preflight with no origin - allowing`);
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-  }
-  
-  return res.status(200).end();
-});
 app.use(express.json());
 
 // Request logging middleware
