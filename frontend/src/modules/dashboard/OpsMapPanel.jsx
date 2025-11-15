@@ -5,7 +5,8 @@ import 'leaflet/dist/leaflet.css';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useI18n } from '../../utils/useI18n';
 import { api } from '../../utils/api';
-import { FiEdit3, FiX, FiCheck } from 'react-icons/fi';
+import { MAP_BASELAYERS, DEFAULT_BASELAYER, getBaseLayerConfig } from '../../utils/mapConfig';
+import { FiEdit3, FiX, FiCheck, FiMap } from 'react-icons/fi';
 import styles from './OpsMapPanel.module.css';
 import SaveAreaModal from './SaveAreaModal';
 
@@ -58,6 +59,36 @@ function OpsMapPanel({ vessels, geofences, opsSites, onVesselClick }) {
   const mapClickHandlerRef = useRef(null);
   const hasUserInteractedRef = useRef(false); // Track if user has manually adjusted map
   const initialBoundsSetRef = useRef(false); // Track if initial bounds have been set
+  const [baseLayer, setBaseLayer] = useState(DEFAULT_BASELAYER); // Current base layer
+  const tileLayerRef = useRef(null); // Reference to current tile layer
+
+  // Function to load a base layer
+  const loadBaseLayer = (layerId) => {
+    if (!mapInstanceRef.current) return;
+
+    const layerConfig = getBaseLayerConfig(layerId);
+    if (!layerConfig) {
+      console.warn(`Invalid layer ID: ${layerId}, falling back to default`);
+      return;
+    }
+
+    // Remove existing tile layer if present
+    if (tileLayerRef.current) {
+      mapInstanceRef.current.removeLayer(tileLayerRef.current);
+      tileLayerRef.current = null;
+    }
+
+    // Create new tile layer from config
+    const tileLayer = L.tileLayer(layerConfig.url, {
+      attribution: layerConfig.attribution,
+      minZoom: layerConfig.minZoom,
+      maxZoom: layerConfig.maxZoom,
+      subdomains: layerConfig.subdomains || 'abc',
+    });
+
+    tileLayer.addTo(mapInstanceRef.current);
+    tileLayerRef.current = tileLayer;
+  };
 
   // Initialize map
   useEffect(() => {
@@ -71,7 +102,7 @@ function OpsMapPanel({ vessels, geofences, opsSites, onVesselClick }) {
         attributionControl: true,
       }).setView([-22.9068, -43.1729], 6);
 
-      // Use Google Maps if API key is available, otherwise fall back to OpenStreetMap
+      // Use Google Maps if API key is available, otherwise use configured base layer
       const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
       
       if (googleMapsApiKey && typeof window !== 'undefined') {
@@ -86,15 +117,17 @@ function OpsMapPanel({ vessels, geofences, opsSites, onVesselClick }) {
               // Use Google Maps with Leaflet plugin
               try {
                 if (L.gridLayer && L.gridLayer.googleMutant) {
-                  L.gridLayer.googleMutant({
+                  const googleLayer = L.gridLayer.googleMutant({
                     type: 'roadmap', // Options: 'roadmap', 'satellite', 'hybrid', 'terrain'
                     maxZoom: 19,
-                  }).addTo(mapInstanceRef.current);
+                  });
+                  googleLayer.addTo(mapInstanceRef.current);
+                  tileLayerRef.current = googleLayer;
                   return;
                 }
               } catch (error) {
-                console.warn('Failed to initialize Google Maps, falling back to OpenStreetMap:', error);
-                loadOpenStreetMap();
+                console.warn('Failed to initialize Google Maps, falling back to configured base layer:', error);
+                loadBaseLayer(baseLayer);
                 return;
               }
             } else {
@@ -108,29 +141,31 @@ function OpsMapPanel({ vessels, geofences, opsSites, onVesselClick }) {
                 setTimeout(async () => {
                   try {
                     if (mapInstanceRef.current && L.gridLayer && L.gridLayer.googleMutant) {
-                      L.gridLayer.googleMutant({
+                      const googleLayer = L.gridLayer.googleMutant({
                         type: 'roadmap',
                         maxZoom: 19,
-                      }).addTo(mapInstanceRef.current);
+                      });
+                      googleLayer.addTo(mapInstanceRef.current);
+                      tileLayerRef.current = googleLayer;
                     } else {
-                      loadOpenStreetMap();
+                      loadBaseLayer(baseLayer);
                     }
                   } catch (error) {
-                    console.warn('Failed to load Google Maps, falling back to OpenStreetMap:', error);
-                    loadOpenStreetMap();
+                    console.warn('Failed to load Google Maps, falling back to configured base layer:', error);
+                    loadBaseLayer(baseLayer);
                   }
                 }, 100);
               };
               script.onerror = () => {
-                console.warn('Failed to load Google Maps API, falling back to OpenStreetMap');
-                loadOpenStreetMap();
+                console.warn('Failed to load Google Maps API, falling back to configured base layer');
+                loadBaseLayer(baseLayer);
               };
               document.head.appendChild(script);
               return;
             }
           } catch (error) {
-            console.warn('Failed to load Google Maps plugin, falling back to OpenStreetMap:', error);
-            loadOpenStreetMap();
+            console.warn('Failed to load Google Maps plugin, falling back to configured base layer:', error);
+            loadBaseLayer(baseLayer);
           }
         };
         
@@ -138,17 +173,8 @@ function OpsMapPanel({ vessels, geofences, opsSites, onVesselClick }) {
         return;
       }
       
-      // Fallback to OpenStreetMap
-      loadOpenStreetMap();
-    };
-
-    const loadOpenStreetMap = () => {
-      if (mapInstanceRef.current) {
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '© OpenStreetMap contributors',
-          maxZoom: 19,
-        }).addTo(mapInstanceRef.current);
-      }
+      // Load configured base layer (standard or nautical)
+      loadBaseLayer(baseLayer);
     };
 
     initializeMap();
@@ -178,6 +204,40 @@ function OpsMapPanel({ vessels, geofences, opsSites, onVesselClick }) {
       // Cleanup
     };
   }, []);
+
+  // Handle base layer switching
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+    
+    // Only switch if we're not using Google Maps
+    const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+    if (!googleMapsApiKey || !tileLayerRef.current || !(tileLayerRef.current instanceof L.TileLayer)) {
+      const layerConfig = getBaseLayerConfig(baseLayer);
+      if (!layerConfig) return;
+
+      // Remove existing tile layer if present
+      if (tileLayerRef.current) {
+        mapInstanceRef.current.removeLayer(tileLayerRef.current);
+        tileLayerRef.current = null;
+      }
+
+      // Create new tile layer from config
+      const tileLayer = L.tileLayer(layerConfig.url, {
+        attribution: layerConfig.attribution,
+        minZoom: layerConfig.minZoom,
+        maxZoom: layerConfig.maxZoom,
+        subdomains: layerConfig.subdomains || 'abc',
+      });
+
+      tileLayer.addTo(mapInstanceRef.current);
+      tileLayerRef.current = tileLayer;
+    }
+  }, [baseLayer]);
+
+  // Handler for layer switching
+  const handleLayerSwitch = (layerId) => {
+    setBaseLayer(layerId);
+  };
 
   // Note: By default, no Ops Zones are visible. Users must manually select which ones to display.
 
@@ -595,6 +655,30 @@ function OpsMapPanel({ vessels, geofences, opsSites, onVesselClick }) {
         </div>
       )}
       
+      {/* Base Layer Switcher */}
+      <div className={styles.layerSwitcher}>
+        <div className={styles.layerSwitcherLabel}>
+          <FiMap size={16} />
+          <span>Mapa</span>
+        </div>
+        <div className={styles.layerButtons}>
+          <button
+            className={`${styles.layerButton} ${baseLayer === 'standard' ? styles.layerButtonActive : ''}`}
+            onClick={() => handleLayerSwitch('standard')}
+            title="Standard Map"
+          >
+            Padrão
+          </button>
+          <button
+            className={`${styles.layerButton} ${baseLayer === 'nautical' ? styles.layerButtonActive : ''}`}
+            onClick={() => handleLayerSwitch('nautical')}
+            title="Nautical Chart"
+          >
+            Carta Náutica
+          </button>
+        </div>
+      </div>
+
       {/* Drawing Controls */}
       <div className={styles.mapControls}>
         {!isDrawing ? (
