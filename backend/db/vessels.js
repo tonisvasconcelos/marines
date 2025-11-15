@@ -117,18 +117,7 @@ export async function getVesselById(vesselId, tenantId) {
       };
     }
     
-    // Vessel not found in database - check if it's a connection/table error or just not found
-    // Check if error is about missing table (table doesn't exist yet)
-    const isTableMissing = error?.message?.includes('relation') || 
-                          error?.message?.includes('does not exist') ||
-                          error?.code === '42P01'; // PostgreSQL error code for "relation does not exist"
-    
-    // Check if it's a connection error
-    const isConnectionError = error?.message?.includes('ECONNREFUSED') ||
-                            error?.message?.includes('connection') ||
-                            error?.code === 'ECONNREFUSED';
-    
-    // If table exists but vessel not found, still try mock data fallback
+    // Vessel not found in database - try mock data fallback
     // This handles the case where dashboard returns mock vessels but database is empty
     const { getMockVessels } = await import('../data/mockData.js');
     const mockVessels = getMockVessels(tenantId);
