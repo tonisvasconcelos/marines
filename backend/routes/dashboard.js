@@ -2,6 +2,7 @@ import express from 'express';
 import { getMockPortCalls, getMockVessels, getMockAisPosition, getMockOpsSites } from '../data/mockData.js';
 import * as myshiptracking from '../services/myshiptracking.js';
 import { getAisConfig } from '../services/aisConfig.js';
+import * as vesselDb from '../db/vessels.js';
 
 const router = express.Router();
 
@@ -36,10 +37,21 @@ function checkPointInCircle(point, center, radius) {
   return distance <= radius;
 }
 
-router.get('/stats', (req, res) => {
+router.get('/stats', async (req, res) => {
   const { tenantId } = req;
   const portCalls = getMockPortCalls(tenantId);
-  const vessels = getMockVessels(tenantId);
+  
+  // Get vessels from database (with fallback to mock data)
+  let vessels;
+  try {
+    vessels = await vesselDb.getVessels(tenantId);
+    if (vessels.length === 0) {
+      vessels = getMockVessels(tenantId);
+    }
+  } catch (error) {
+    console.error('Error fetching vessels from database, using mock data:', error);
+    vessels = getMockVessels(tenantId);
+  }
   
   const activePortCalls = portCalls.filter((pc) => pc.status === 'IN_PROGRESS').length;
   const shipsAtSea = portCalls.filter((pc) => pc.status === 'PLANNED').length;
@@ -82,13 +94,17 @@ router.get('/stats', (req, res) => {
 router.get('/active-vessels', async (req, res) => {
   const { tenantId } = req;
   
-  // Use database with fallback to mock data (consistent with other routes)
-  const { getVessels } = await import('../db/vessels.js');
+  // Get vessels from database (with fallback to mock data)
   let vessels;
   try {
-    vessels = await getVessels(tenantId);
+    vessels = await vesselDb.getVessels(tenantId);
+    // If database returns empty array and we're using database, fall back to mock
+    if (vessels.length === 0) {
+      console.warn('No vessels in database, falling back to mock data');
+      vessels = getMockVessels(tenantId);
+    }
   } catch (error) {
-    console.warn('Error fetching vessels for dashboard, using mock data:', error);
+    console.error('Error fetching vessels from database, using mock data:', error);
     vessels = getMockVessels(tenantId);
   }
   
