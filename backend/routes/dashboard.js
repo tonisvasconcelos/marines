@@ -111,19 +111,30 @@ router.get('/active-vessels', async (req, res) => {
   const portCalls = getMockPortCalls(tenantId);
   const aisConfig = getAisConfig(tenantId);
   
-  // Log AIS configuration status
+  // Log AIS configuration status (always log, not just in dev)
   console.log('[dashboard/active-vessels] AIS Configuration:', {
     tenantId,
     hasConfig: !!aisConfig,
     provider: aisConfig?.provider,
+    providerType: typeof aisConfig?.provider,
+    providerMatches: aisConfig?.provider === 'myshiptracking',
     hasApiKey: !!aisConfig?.apiKey,
+    apiKeyLength: aisConfig?.apiKey?.length || 0,
     hasSecretKey: !!aisConfig?.secretKey,
+    secretKeyLength: aisConfig?.secretKey?.length || 0,
+    fullConfig: aisConfig ? Object.keys(aisConfig) : null,
   });
+  
+  // Normalize provider name (case-insensitive check)
+  const isMyShipTrackingConfigured = aisConfig?.provider && 
+    (aisConfig.provider.toLowerCase() === 'myshiptracking' || 
+     aisConfig.provider.toLowerCase() === 'my-ship-tracking' ||
+     aisConfig.provider === 'myshiptracking');
   
   // Helper function to get AIS position (tries real API first, falls back to mock)
   const getVesselPosition = async (vessel) => {
-    // Try real AIS API if configured
-    if (aisConfig?.provider === 'myshiptracking' && aisConfig?.apiKey) {
+    // Try real AIS API if configured (use normalized check)
+    if (isMyShipTrackingConfigured && aisConfig?.apiKey && aisConfig.apiKey.trim() !== '') {
       console.log(`[getVesselPosition] Attempting to fetch real AIS data for vessel ${vessel.id} (${vessel.name})`, {
         hasMmsi: !!vessel.mmsi,
         hasImo: !!vessel.imo,
@@ -254,7 +265,7 @@ router.get('/active-vessels', async (req, res) => {
       console.log(`[getVesselPosition] Using mock position for vessel ${vessel.id} (${vessel.name}):`, {
         source: 'mock',
         position: mockPositionData,
-        reason: aisConfig?.provider === 'myshiptracking' && aisConfig?.apiKey 
+        reason: isMyShipTrackingConfigured && aisConfig?.apiKey && aisConfig.apiKey.trim() !== ''
           ? 'AIS API failed or returned no data' 
           : 'AIS API not configured',
       });
