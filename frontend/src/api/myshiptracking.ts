@@ -33,9 +33,13 @@ async function makeProxyRequest<T>(
   };
 
   // Include auth token if available
-  const token = localStorage.getItem('token');
+  // The app stores the token as 'auth_token' (see AuthContext.jsx)
+  const token = localStorage.getItem('auth_token');
+  
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
+  } else {
+    console.warn('[MyShipTracking API] No authentication token found - requests will fail with 401');
   }
 
   try {
