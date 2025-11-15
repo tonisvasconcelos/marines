@@ -169,64 +169,80 @@ function VesselDetail() {
     draught: vessel.draught || vessel.draft || position?.draught || position?.draft || null,
   };
 
-  // Extract AIS position data - safe access with proper normalization
-  const rawLat = position?.lat || position?.Lat || position?.latitude || position?.Latitude || null;
-  const rawLon = position?.lon || position?.Lon || position?.longitude || position?.Longitude || null;
+  // CRITICAL: Extract raw AIS coordinates from API response
+  // These must preserve full decimal precision for accurate map plotting
+  // DO NOT round, truncate, or format these values - they are used for map markers
+  const rawLat = position?.lat ?? position?.latitude ?? position?.Lat ?? position?.Latitude ?? null;
+  const rawLon = position?.lon ?? position?.longitude ?? position?.Lon ?? position?.Longitude ?? null;
   
-  // Debug: Log raw position data to help diagnose plotting issues
-  if (position && (rawLat || rawLon)) {
-    console.log('[VesselDetail] Raw position data:', {
-      raw: position,
-      extracted: { lat: rawLat, lon: rawLon },
-      vesselId: id,
-      vesselName: vessel?.name,
-    });
-  }
+  // Convert to numbers if strings (use parseFloat to preserve full decimal precision)
+  // CRITICAL: Do NOT use parseInt, Math.round, toFixed, or any rounding here
+  let rawLatNumber = rawLat != null ? (typeof rawLat === 'string' ? parseFloat(rawLat) : Number(rawLat)) : null;
+  let rawLonNumber = rawLon != null ? (typeof rawLon === 'string' ? parseFloat(rawLon) : Number(rawLon)) : null;
   
-  // Convert to numbers and validate
-  let normalizedLat = rawLat != null ? (typeof rawLat === 'string' ? parseFloat(rawLat) : rawLat) : null;
-  let normalizedLon = rawLon != null ? (typeof rawLon === 'string' ? parseFloat(rawLon) : rawLon) : null;
-  
-  // Validate coordinate ranges (common issue: coordinates might be swapped)
-  if (normalizedLat != null && normalizedLon != null && !isNaN(normalizedLat) && !isNaN(normalizedLon)) {
+  // Validate coordinates are finite numbers (not NaN, not Infinity)
+  if (rawLatNumber != null && rawLonNumber != null && isFinite(rawLatNumber) && isFinite(rawLonNumber)) {
     // Check if coordinates might be swapped (lat > 90 or lat < -90, or lon within lat range)
-    if ((normalizedLat > 90 || normalizedLat < -90) && (normalizedLon >= -90 && normalizedLon <= 90)) {
+    if ((rawLatNumber > 90 || rawLatNumber < -90) && (rawLonNumber >= -90 && rawLonNumber <= 90)) {
       // Coordinates appear to be swapped - swap them back
-      console.warn('[VesselDetail] Coordinates appear to be swapped, correcting:', { 
-        original: { lat: normalizedLat, lon: normalizedLon },
-        vesselId: id,
-        vesselName: vessel?.name,
-      });
-      [normalizedLat, normalizedLon] = [normalizedLon, normalizedLat];
+      if (import.meta.env.DEV) {
+        console.warn('[VesselDetail] Coordinates appear to be swapped, correcting:', { 
+          original: { lat: rawLatNumber, lon: rawLonNumber },
+          vesselId: id,
+          vesselName: vessel?.name,
+        });
+      }
+      [rawLatNumber, rawLonNumber] = [rawLonNumber, rawLatNumber];
     }
     
-    // Final validation
-    if (normalizedLat < -90 || normalizedLat > 90 || normalizedLon < -180 || normalizedLon > 180) {
-      console.error('[VesselDetail] Invalid coordinate ranges after normalization:', { 
-        lat: normalizedLat, 
-        lon: normalizedLon,
-        vesselId: id,
-        vesselName: vessel?.name,
-      });
-      normalizedLat = null;
-      normalizedLon = null;
+    // Final validation - ensure coordinates are within valid ranges
+    if (rawLatNumber < -90 || rawLatNumber > 90 || rawLonNumber < -180 || rawLonNumber > 180) {
+      if (import.meta.env.DEV) {
+        console.error('[VesselDetail] Invalid coordinate ranges:', { 
+          lat: rawLatNumber, 
+          lon: rawLonNumber,
+          vesselId: id,
+          vesselName: vessel?.name,
+        });
+      }
+      rawLatNumber = null;
+      rawLonNumber = null;
     } else {
-      // Log successful normalization
-      console.log('[VesselDetail] Normalized coordinates:', {
-        lat: normalizedLat,
-        lon: normalizedLon,
-        vesselId: id,
-        vesselName: vessel?.name,
-      });
+      // Log raw coordinates used for map plotting (development mode only)
+      if (import.meta.env.DEV) {
+        console.log('[VesselDetail] Raw full-precision coordinates for map plotting:', {
+          lat: rawLatNumber,
+          lon: rawLonNumber,
+          latPrecision: rawLatNumber.toString().split('.')[1]?.length || 0,
+          lonPrecision: rawLonNumber.toString().split('.')[1]?.length || 0,
+          vesselId: id,
+          vesselName: vessel?.name,
+          note: 'These are the EXACT coordinates used for Leaflet marker - no rounding applied',
+        });
+      }
     }
   } else {
-    normalizedLat = null;
-    normalizedLon = null;
+    rawLatNumber = null;
+    rawLonNumber = null;
   }
   
+  // CRITICAL: Store raw full-precision coordinates for map plotting
+  // These values are NEVER rounded or formatted - they go directly to Leaflet
+  const mapCoordinates = {
+    lat: rawLatNumber,  // Full precision - used for map markers
+    lon: rawLonNumber,  // Full precision - used for map markers
+  };
+  
+  // Store formatted values ONLY for display in AIS Telemetry section
+  // These are derived from raw values but never used for map plotting
   const aisPositionData = {
-    latitude: normalizedLat,
-    longitude: normalizedLon,
+    // Raw coordinates (full precision) - for internal use and map plotting
+    rawLatitude: rawLatNumber,
+    rawLongitude: rawLonNumber,
+    // Display coordinates (formatted) - ONLY for UI text display
+    latitude: rawLatNumber,  // Keep as number for calculations, format only in UI
+    longitude: rawLonNumber, // Keep as number for calculations, format only in UI
+    // Other AIS data
     speed: position?.sog || position?.speed || position?.speedOverGround || null,
     course: position?.cog || position?.course || position?.courseOverGround || null,
     heading: position?.heading || null,
@@ -266,11 +282,11 @@ function VesselDetail() {
       {/* Hero Section - Map and KPIs */}
       <div className={styles.hero}>
         <div className={styles.mapContainer}>
-          {aisPositionData.latitude && aisPositionData.longitude ? (
+          {mapCoordinates.lat != null && mapCoordinates.lon != null ? (
             <MapView
               position={{
-                lat: aisPositionData.latitude,
-                lon: aisPositionData.longitude,
+                lat: mapCoordinates.lat,  // CRITICAL: Use raw full-precision coordinate
+                lon: mapCoordinates.lon,    // CRITICAL: Use raw full-precision coordinate
               }}
               vesselName={aisVesselData.name}
             />

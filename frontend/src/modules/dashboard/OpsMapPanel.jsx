@@ -494,19 +494,23 @@ function OpsMapPanel({ vessels, geofences, opsSites, onVesselClick }) {
         }
         
         // Debug: Log normalized coordinates and Leaflet marker creation (development mode only)
+        // CRITICAL: Verify we're using full-precision coordinates (not rounded/truncated)
         if (import.meta.env.DEV) {
-          console.log('[OpsMapPanel] Creating Leaflet marker:', {
+          console.log('[OpsMapPanel] Creating Leaflet marker with full-precision coordinates:', {
             vesselId: vessel.id,
             vesselName: vessel.name,
             normalized: normalizedPos,
+            latPrecision: normalizedPos.lat.toString().split('.')[1]?.length || 0,
+            lonPrecision: normalizedPos.lon.toString().split('.')[1]?.length || 0,
             leafletFormat: [normalizedPos.lat, normalizedPos.lon], // [latitude, longitude]
-            note: 'Leaflet requires [lat, lon] format',
+            note: 'Using raw API coordinates - no rounding applied for map plotting',
           });
         }
 
         // CRITICAL: Leaflet marker requires [latitude, longitude] format
-        // normalizedPos.lat = latitude (-90 to 90)
-        // normalizedPos.lon = longitude (-180 to 180)
+        // normalizedPos.lat = latitude (-90 to 90) - FULL PRECISION from API
+        // normalizedPos.lon = longitude (-180 to 180) - FULL PRECISION from API
+        // These coordinates are NEVER rounded - they preserve full decimal precision
         const icon = createVesselIcon(vessel.status, 16);
         const marker = L.marker([normalizedPos.lat, normalizedPos.lon], { icon })
           .addTo(map);

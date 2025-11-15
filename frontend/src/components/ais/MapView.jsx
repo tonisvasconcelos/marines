@@ -31,16 +31,20 @@ function MapView({ position, track, vesselName }) {
     const map = mapInstanceRef.current;
 
     // Update position marker
+    // CRITICAL: This component receives full-precision coordinates and must use them as-is
+    // DO NOT round, truncate, or format coordinates - they are already in full precision from the API
     if (position) {
       // Extract coordinates from various field name formats
+      // Priority: lat/lon > latitude/longitude > Lat/Lon > Latitude/Longitude
       let lat = position.lat ?? position.latitude ?? position.Lat ?? position.Latitude ?? null;
       let lon = position.lon ?? position.longitude ?? position.Lon ?? position.Longitude ?? null;
       
-      // Convert to numbers if they're strings (use parseFloat to preserve decimals)
+      // Convert to numbers if they're strings (use parseFloat to preserve full decimal precision)
+      // CRITICAL: Do NOT use parseInt, Math.round, toFixed, or any rounding here
       if (typeof lat === 'string') lat = parseFloat(lat);
       if (typeof lon === 'string') lon = parseFloat(lon);
       
-      // Convert to numbers if not already
+      // Convert to numbers if not already (preserve full precision)
       if (lat !== null) lat = Number(lat);
       if (lon !== null) lon = Number(lon);
       
@@ -66,15 +70,19 @@ function MapView({ position, track, vesselName }) {
           map.removeLayer(markerRef.current);
         }
 
-        // CRITICAL: Create marker with validated coordinates
+        // CRITICAL: Create marker with full-precision coordinates
         // Leaflet expects [latitude, longitude] format
         // lat = latitude (-90 to 90), lon = longitude (-180 to 180)
+        // These coordinates are NOT rounded - they preserve full API precision
         if (import.meta.env.DEV) {
-          console.log('[MapView] Creating marker at:', {
+          console.log('[MapView] Creating marker with full-precision coordinates:', {
             lat,
             lon,
+            latPrecision: lat.toString().split('.')[1]?.length || 0,
+            lonPrecision: lon.toString().split('.')[1]?.length || 0,
             leafletFormat: [lat, lon],
             vesselName: vesselName || 'Unknown',
+            note: 'Using raw API coordinates - no rounding applied',
           });
         }
         
@@ -82,7 +90,7 @@ function MapView({ position, track, vesselName }) {
           .addTo(map)
           .bindPopup(vesselName || 'Vessel Position');
 
-        // Center map on vessel position (also [lat, lon] format)
+        // Center map on vessel position (also [lat, lon] format with full precision)
         map.setView([lat, lon], 10);
       } else {
         if (import.meta.env.DEV) {
