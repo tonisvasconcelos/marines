@@ -43,16 +43,20 @@ export const MAP_BASELAYERS = {
   nautical: {
     id: 'nautical',
     name: 'Nautical Chart',
-    // OpenSeaMap provides nautical chart overlays
-    // Using OpenStreetMap base with nautical styling
-    // Alternative: Use custom URL from env var if provided (e.g., Chartbundle, NOAA, etc.)
-    url: import.meta.env.VITE_NAUTICAL_TILES_URL || 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors | Nautical data: <a href="https://www.openseamap.org">OpenSeaMap</a>',
+    // OpenSeaMap seamark overlay URL (shows buoys, lighthouses, navigation aids)
+    // This is used as an overlay on top of OpenStreetMap base layer
+    // Custom URL can be set via VITE_NAUTICAL_TILES_URL for other services
+    url: import.meta.env.VITE_NAUTICAL_TILES_URL || 'https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png',
+    attribution: '© <a href="https://www.openseamap.org">OpenSeaMap</a> contributors | © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     minZoom: 3,
     maxZoom: 18,
     subdomains: 'abc',
-    // Note: For production, consider using a dedicated nautical chart service
-    // such as Chartbundle, NOAA RNC, or other WMS services that require API keys
+    // Note: The nautical layer uses OpenStreetMap as base + OpenSeaMap seamark overlay
+    // For production with full nautical charts, consider:
+    // - NOAA RNC tiles (region-specific, requires chart ID): https://tileservice.charts.noaa.gov/tiles/{chartId}/{z}/{x}/{y}.png
+    // - Chartbundle (requires API key)
+    // - Custom WMS nautical chart service
+    // Set VITE_NAUTICAL_TILES_URL to override the overlay, or modify loadBaseLayer() to use a full nautical base
   },
 };
 

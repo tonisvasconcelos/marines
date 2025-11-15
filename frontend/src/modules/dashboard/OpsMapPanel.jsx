@@ -61,6 +61,7 @@ function OpsMapPanel({ vessels, geofences, opsSites, onVesselClick }) {
   const initialBoundsSetRef = useRef(false); // Track if initial bounds have been set
   const [baseLayer, setBaseLayer] = useState(DEFAULT_BASELAYER); // Current base layer
   const tileLayerRef = useRef(null); // Reference to current tile layer
+  const overlayLayerRef = useRef(null); // Reference to overlay layer (for nautical charts)
 
   // Function to load a base layer
   const loadBaseLayer = (layerId) => {
@@ -78,16 +79,46 @@ function OpsMapPanel({ vessels, geofences, opsSites, onVesselClick }) {
       tileLayerRef.current = null;
     }
 
-    // Create new tile layer from config
-    const tileLayer = L.tileLayer(layerConfig.url, {
-      attribution: layerConfig.attribution,
-      minZoom: layerConfig.minZoom,
-      maxZoom: layerConfig.maxZoom,
-      subdomains: layerConfig.subdomains || 'abc',
-    });
+    // Remove existing overlay layer if present
+    if (overlayLayerRef.current) {
+      mapInstanceRef.current.removeLayer(overlayLayerRef.current);
+      overlayLayerRef.current = null;
+    }
 
-    tileLayer.addTo(mapInstanceRef.current);
-    tileLayerRef.current = tileLayer;
+    // For nautical charts, we need both a base layer and an overlay
+    if (layerId === 'nautical') {
+      // Use OpenStreetMap as base for nautical charts
+      const baseTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        minZoom: 3,
+        maxZoom: 19,
+        subdomains: 'abc',
+      });
+      baseTileLayer.addTo(mapInstanceRef.current);
+      tileLayerRef.current = baseTileLayer;
+
+      // Add OpenSeaMap seamark overlay for nautical features
+      // This shows buoys, lighthouses, seamarks, and other navigation aids
+      const nauticalOverlay = L.tileLayer(layerConfig.url, {
+        attribution: layerConfig.attribution,
+        minZoom: layerConfig.minZoom,
+        maxZoom: layerConfig.maxZoom,
+        subdomains: layerConfig.subdomains || 'abc',
+        opacity: 0.8, // Slightly transparent so base map shows through
+      });
+      nauticalOverlay.addTo(mapInstanceRef.current);
+      overlayLayerRef.current = nauticalOverlay;
+    } else {
+      // Standard layer - just use the configured base layer
+      const tileLayer = L.tileLayer(layerConfig.url, {
+        attribution: layerConfig.attribution,
+        minZoom: layerConfig.minZoom,
+        maxZoom: layerConfig.maxZoom,
+        subdomains: layerConfig.subdomains || 'abc',
+      });
+      tileLayer.addTo(mapInstanceRef.current);
+      tileLayerRef.current = tileLayer;
+    }
   };
 
   // Initialize map
@@ -212,25 +243,7 @@ function OpsMapPanel({ vessels, geofences, opsSites, onVesselClick }) {
     // Only switch if we're not using Google Maps
     const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
     if (!googleMapsApiKey || !tileLayerRef.current || !(tileLayerRef.current instanceof L.TileLayer)) {
-      const layerConfig = getBaseLayerConfig(baseLayer);
-      if (!layerConfig) return;
-
-      // Remove existing tile layer if present
-      if (tileLayerRef.current) {
-        mapInstanceRef.current.removeLayer(tileLayerRef.current);
-        tileLayerRef.current = null;
-      }
-
-      // Create new tile layer from config
-      const tileLayer = L.tileLayer(layerConfig.url, {
-        attribution: layerConfig.attribution,
-        minZoom: layerConfig.minZoom,
-        maxZoom: layerConfig.maxZoom,
-        subdomains: layerConfig.subdomains || 'abc',
-      });
-
-      tileLayer.addTo(mapInstanceRef.current);
-      tileLayerRef.current = tileLayer;
+      loadBaseLayer(baseLayer);
     }
   }, [baseLayer]);
 
