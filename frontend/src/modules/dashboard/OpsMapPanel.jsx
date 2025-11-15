@@ -384,6 +384,13 @@ function OpsMapPanel({ vessels, geofences, opsSites, onVesselClick }) {
       vessels.forEach((vessel) => {
         if (!vessel.position) return;
         
+        // Debug: Log raw position data from API
+        console.log('[OpsMapPanel] Raw vessel position from API:', {
+          vesselId: vessel.id,
+          vesselName: vessel.name,
+          rawPosition: vessel.position,
+        });
+        
         // Normalize and validate coordinates (same logic as MapView)
         const normalizedPos = normalizeVesselPosition({
           ...vessel.position,
@@ -398,6 +405,14 @@ function OpsMapPanel({ vessels, geofences, opsSites, onVesselClick }) {
           });
           return;
         }
+        
+        // Debug: Log normalized coordinates
+        console.log('[OpsMapPanel] Normalized coordinates for plotting:', {
+          vesselId: vessel.id,
+          vesselName: vessel.name,
+          normalized: normalizedPos,
+          willPlotAt: [normalizedPos.lat, normalizedPos.lon],
+        });
 
         const icon = createVesselIcon(vessel.status, 16);
         const marker = L.marker([normalizedPos.lat, normalizedPos.lon], { icon })
