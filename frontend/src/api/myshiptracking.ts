@@ -8,8 +8,15 @@ const MYSHIPTRACKING_BASE_URL = 'https://api.myshiptracking.com';
 
 /**
  * Get API base URL (use backend proxy for security)
+ * VITE_API_URL should be the full backend URL (e.g., https://backend.railway.app)
+ * We need to add /api prefix like the main api.js client does
  */
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+function getApiBaseUrl() {
+  const baseUrl = import.meta.env.VITE_API_URL 
+    ? `${import.meta.env.VITE_API_URL}/api`
+    : '/api';
+  return baseUrl;
+}
 
 /**
  * Make request to backend proxy (which uses tenant's configured API key)
@@ -18,7 +25,11 @@ async function makeProxyRequest<T>(
   endpoint: string,
   params: Record<string, string | number | boolean | undefined> = {}
 ): Promise<T> {
-  const url = new URL(`${API_BASE_URL}${endpoint}`);
+  const baseUrl = getApiBaseUrl();
+  const fullUrl = baseUrl.startsWith('http') 
+    ? `${baseUrl}${endpoint}`
+    : `${window.location.origin}${baseUrl}${endpoint}`;
+  const url = new URL(fullUrl);
   
   // Add query parameters
   Object.entries(params).forEach(([key, value]) => {
@@ -38,11 +49,27 @@ async function makeProxyRequest<T>(
   
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
+    if (import.meta.env.DEV) {
+      console.log('[MyShipTracking API] Adding Authorization header with token:', {
+        tokenLength: token.length,
+        tokenPrefix: token.substring(0, 20) + '...',
+      });
+    }
   } else {
-    console.warn('[MyShipTracking API] No authentication token found - requests will fail with 401');
+    console.error('[MyShipTracking API] No authentication token found in localStorage!');
+    console.error('[MyShipTracking API] Available localStorage keys:', Object.keys(localStorage));
+    console.warn('[MyShipTracking API] Requests will fail with 401 Unauthorized');
   }
 
   try {
+    if (import.meta.env.DEV) {
+      console.log('[MyShipTracking API] Making request:', {
+        url: url.toString(),
+        hasAuthHeader: !!headers['Authorization'],
+        headers: Object.keys(headers),
+      });
+    }
+
     const response = await fetch(url.toString(), {
       method: 'GET',
       headers,
@@ -51,7 +78,16 @@ async function makeProxyRequest<T>(
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: response.statusText }));
-      throw new Error(errorData.error || `API error: ${response.status}`);
+      
+      if (response.status === 401) {
+        console.error('[MyShipTracking API] 401 Unauthorized - Authentication failed:', {
+          endpoint: url.toString(),
+          hasToken: !!token,
+          responseHeaders: Object.fromEntries(response.headers.entries()),
+        });
+      }
+      
+      throw new Error(errorData.error || errorData.message || `API error: ${response.status}`);
     }
 
     const data = await response.json();
