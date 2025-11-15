@@ -109,17 +109,62 @@ router.get('/active-vessels', async (req, res) => {
         }
         
         if (position && (position.latitude || position.lat)) {
-          // Transform MyShipTracking response to our format (normalize coordinates)
-          return {
-            lat: position.latitude || position.lat,
-            lon: position.longitude || position.lon,
-            timestamp: position.timestamp || position.last_position_time || new Date().toISOString(),
-            sog: position.speed || position.sog,
-            cog: position.course || position.cog,
-            heading: position.heading,
-            navStatus: position.nav_status || position.status,
-            source: 'myshiptracking',
-          };
+          // Extract coordinates - handle various MyShipTracking API response formats
+          // API might return: { latitude, longitude } or { lat, lon } or nested structures
+          let lat = position.latitude ?? position.lat ?? null;
+          let lon = position.longitude ?? position.lon ?? null;
+          
+          // Handle nested position object (if API returns { position: { lat, lon } })
+          if ((lat === null || lon === null) && position.position) {
+            lat = position.position.latitude ?? position.position.lat ?? lat;
+            lon = position.position.longitude ?? position.position.lon ?? lon;
+          }
+          
+          // Convert to numbers if strings
+          if (typeof lat === 'string') lat = parseFloat(lat);
+          if (typeof lon === 'string') lon = parseFloat(lon);
+          
+          // Validate coordinates are valid numbers
+          if (lat !== null && lon !== null && isFinite(lat) && isFinite(lon)) {
+            // CRITICAL: Ensure coordinates are in correct order (lat, lon)
+            // MyShipTracking API should return latitude/longitude in correct order
+            // But we validate to prevent any coordinate swapping issues
+            
+            // Transform MyShipTracking response to our format (normalize coordinates)
+            const positionData = {
+              lat: lat,  // CRITICAL: Use extracted lat (not swapped)
+              lon: lon,  // CRITICAL: Use extracted lon (not swapped)
+              timestamp: position.timestamp || position.last_position_time || new Date().toISOString(),
+              sog: position.speed || position.sog,
+              cog: position.course || position.cog,
+              heading: position.heading,
+              navStatus: position.nav_status || position.status,
+              source: 'myshiptracking',
+            };
+            
+            // Log in development for debugging
+            if (process.env.NODE_ENV !== 'production') {
+              console.log('[getVesselPosition] MyShipTracking API response transformed:', {
+                vesselId: vessel.id,
+                vesselName: vessel.name,
+                rawApiResponse: {
+                  latitude: position.latitude,
+                  longitude: position.longitude,
+                  lat: position.lat,
+                  lon: position.lon,
+                },
+                transformed: positionData,
+              });
+            }
+            
+            return positionData;
+          } else {
+            console.warn(`[getVesselPosition] Invalid coordinates from MyShipTracking for vessel ${vessel.id}:`, {
+              lat,
+              lon,
+              position,
+            });
+          }
         }
       } catch (error) {
         console.warn(`Failed to fetch AIS position for vessel ${vessel.id} (${vessel.name}):`, error.message);

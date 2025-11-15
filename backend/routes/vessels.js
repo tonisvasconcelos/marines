@@ -280,28 +280,65 @@ router.get('/:id/position', async (req, res) => {
         }
         
         if (position && (position.latitude || position.lat)) {
-          // Transform MyShipTracking response to our format
-          const positionData = {
-            lat: position.latitude || position.lat,
-            lon: position.longitude || position.lon,
-            timestamp: position.timestamp || position.last_position_time || new Date().toISOString(),
-            sog: position.speed || position.sog,
-            cog: position.course || position.cog,
-            heading: position.heading,
-            navStatus: position.nav_status || position.status,
-            source: 'myshiptracking',
-          };
+          // Extract coordinates - handle various MyShipTracking API response formats
+          let lat = position.latitude ?? position.lat ?? null;
+          let lon = position.longitude ?? position.lon ?? null;
           
-          // Store position in history (database with fallback to mock)
-          try {
-            await vesselDb.storePositionHistory(id, tenantId, positionData);
-          } catch (error) {
-            console.error('Failed to store position history:', error);
-            // Don't fail the request if history storage fails
+          // Handle nested position object (if API returns { position: { lat, lon } })
+          if ((lat === null || lon === null) && position.position) {
+            lat = position.position.latitude ?? position.position.lat ?? lat;
+            lon = position.position.longitude ?? position.position.lon ?? lon;
           }
           
-          res.json(positionData);
-          return;
+          // Convert to numbers if strings
+          if (typeof lat === 'string') lat = parseFloat(lat);
+          if (typeof lon === 'string') lon = parseFloat(lon);
+          
+          // Validate coordinates are valid numbers
+          if (lat !== null && lon !== null && isFinite(lat) && isFinite(lon)) {
+            // Transform MyShipTracking response to our format
+            const positionData = {
+              lat: lat,  // CRITICAL: Use extracted lat (not swapped)
+              lon: lon,  // CRITICAL: Use extracted lon (not swapped)
+              timestamp: position.timestamp || position.last_position_time || new Date().toISOString(),
+              sog: position.speed || position.sog,
+              cog: position.course || position.cog,
+              heading: position.heading,
+              navStatus: position.nav_status || position.status,
+              source: 'myshiptracking',
+            };
+            
+            // Log in development for debugging
+            if (process.env.NODE_ENV !== 'production') {
+              console.log('[vessels/:id/position] MyShipTracking API response transformed:', {
+                vesselId: id,
+                rawApiResponse: {
+                  latitude: position.latitude,
+                  longitude: position.longitude,
+                  lat: position.lat,
+                  lon: position.lon,
+                },
+                transformed: positionData,
+              });
+            }
+            
+            // Store position in history (database with fallback to mock)
+            try {
+              await vesselDb.storePositionHistory(id, tenantId, positionData);
+            } catch (error) {
+              console.error('Failed to store position history:', error);
+              // Don't fail the request if history storage fails
+            }
+            
+            res.json(positionData);
+            return;
+          } else {
+            console.warn(`[vessels/:id/position] Invalid coordinates from MyShipTracking for vessel ${id}:`, {
+              lat,
+              lon,
+              position,
+            });
+          }
         }
       } catch (error) {
         // Log error but fall back to mock data instead of returning 500

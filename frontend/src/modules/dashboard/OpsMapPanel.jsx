@@ -38,50 +38,124 @@ function createVesselIcon(status, size = 20) {
   });
 }
 
-// Normalize and validate vessel position coordinates
-// Same logic as MapView component to ensure consistent plotting
+/**
+ * Normalize and validate vessel position coordinates
+ * CRITICAL: Ensures AIS coordinates are plotted correctly on Leaflet maps
+ * 
+ * Leaflet requires: L.marker([latitude, longitude])
+ * AIS coordinates: latitude (-90 to 90), longitude (-180 to 180)
+ * 
+ * This function handles:
+ * - Various field name formats (lat/lon, latitude/longitude, Lat/Lon, etc.)
+ * - String to number conversion
+ * - Coordinate validation
+ * - Coordinate swapping detection (only if lat is clearly out of range)
+ */
 function normalizeVesselPosition(position) {
-  if (!position) return null;
-  
-  // Extract coordinates from various field name formats
-  const rawLat = position.lat || position.Lat || position.latitude || position.Latitude || null;
-  const rawLon = position.lon || position.Lon || position.longitude || position.Longitude || null;
-  
-  if (!rawLat || !rawLon) return null;
-  
-  // Convert to numbers if they're strings
-  let normalizedLat = typeof rawLat === 'string' ? parseFloat(rawLat) : rawLat;
-  let normalizedLon = typeof rawLon === 'string' ? parseFloat(rawLon) : rawLon;
-  
-  // Validate coordinates are valid numbers
-  if (isNaN(normalizedLat) || isNaN(normalizedLon)) {
+  if (!position) {
+    if (import.meta.env.DEV) {
+      console.warn('[normalizeVesselPosition] Position is null/undefined');
+    }
     return null;
   }
   
-  // Check if coordinates might be swapped (lat > 90 or lat < -90, or lon within lat range)
-  if ((normalizedLat > 90 || normalizedLat < -90) && (normalizedLon >= -90 && normalizedLon <= 90)) {
-    // Coordinates appear to be swapped - swap them back
-    console.warn('[OpsMapPanel] Coordinates appear to be swapped, correcting:', { 
-      original: { lat: normalizedLat, lon: normalizedLon },
+  // Extract coordinates from various field name formats (case-insensitive)
+  // Priority: lat/lon > latitude/longitude > Lat/Lon > Latitude/Longitude
+  const rawLat = position.lat ?? position.latitude ?? position.Lat ?? position.Latitude ?? null;
+  const rawLon = position.lon ?? position.longitude ?? position.Lon ?? position.Longitude ?? null;
+  
+  // Debug logging in development mode
+  if (import.meta.env.DEV) {
+    console.log('[normalizeVesselPosition] Raw coordinates extracted:', {
+      rawLat,
+      rawLon,
+      rawLatType: typeof rawLat,
+      rawLonType: typeof rawLon,
+      positionKeys: Object.keys(position),
       vesselName: position.vesselName || 'Unknown',
     });
+  }
+  
+  if (rawLat === null || rawLon === null || rawLat === undefined || rawLon === undefined) {
+    if (import.meta.env.DEV) {
+      console.warn('[normalizeVesselPosition] Missing coordinates:', {
+        hasLat: rawLat !== null && rawLat !== undefined,
+        hasLon: rawLon !== null && rawLon !== undefined,
+        position,
+      });
+    }
+    return null;
+  }
+  
+  // Convert to numbers if they're strings
+  // Use parseFloat to preserve decimal precision (not parseInt!)
+  let normalizedLat = typeof rawLat === 'string' ? parseFloat(rawLat) : Number(rawLat);
+  let normalizedLon = typeof rawLon === 'string' ? parseFloat(rawLon) : Number(rawLon);
+  
+  // Validate coordinates are valid numbers (not NaN, not Infinity)
+  if (!isFinite(normalizedLat) || !isFinite(normalizedLon)) {
+    if (import.meta.env.DEV) {
+      console.error('[normalizeVesselPosition] Invalid number conversion:', {
+        rawLat,
+        rawLon,
+        normalizedLat,
+        normalizedLon,
+        position,
+      });
+    }
+    return null;
+  }
+  
+  // CRITICAL: Check if coordinates might be swapped
+  // Only swap if lat is clearly out of valid range (-90 to 90) AND lon is within lat range
+  // This prevents false positives for valid coordinates near poles
+  const latOutOfRange = normalizedLat > 90 || normalizedLat < -90;
+  const lonInLatRange = normalizedLon >= -90 && normalizedLon <= 90;
+  
+  if (latOutOfRange && lonInLatRange) {
+    // Coordinates appear to be swapped - swap them back
+    if (import.meta.env.DEV) {
+      console.warn('[normalizeVesselPosition] Coordinates appear to be swapped, correcting:', { 
+        original: { lat: normalizedLat, lon: normalizedLon },
+        corrected: { lat: normalizedLon, lon: normalizedLat },
+        vesselName: position.vesselName || 'Unknown',
+      });
+    }
     [normalizedLat, normalizedLon] = [normalizedLon, normalizedLat];
   }
   
   // Final validation - ensure coordinates are within valid ranges
+  // Latitude: -90 to 90 (South to North)
+  // Longitude: -180 to 180 (West to East)
   if (normalizedLat < -90 || normalizedLat > 90 || normalizedLon < -180 || normalizedLon > 180) {
-    console.error('[OpsMapPanel] Invalid coordinate ranges:', { 
-      lat: normalizedLat, 
-      lon: normalizedLon,
-      vesselName: position.vesselName || 'Unknown',
-    });
+    if (import.meta.env.DEV) {
+      console.error('[normalizeVesselPosition] Invalid coordinate ranges:', { 
+        lat: normalizedLat, 
+        lon: normalizedLon,
+        latRange: normalizedLat < -90 || normalizedLat > 90,
+        lonRange: normalizedLon < -180 || normalizedLon > 180,
+        vesselName: position.vesselName || 'Unknown',
+        position,
+      });
+    }
     return null;
   }
   
-  return {
+  // Return normalized coordinates
+  const result = {
     lat: normalizedLat,
     lon: normalizedLon,
   };
+  
+  if (import.meta.env.DEV) {
+    console.log('[normalizeVesselPosition] Final normalized coordinates:', {
+      ...result,
+      vesselName: position.vesselName || 'Unknown',
+      willPlotAt: `[${result.lat}, ${result.lon}]`, // Leaflet format
+    });
+  }
+  
+  return result;
 }
 
 function OpsMapPanel({ vessels, geofences, opsSites, onVesselClick }) {
@@ -382,14 +456,25 @@ function OpsMapPanel({ vessels, geofences, opsSites, onVesselClick }) {
       const bounds = [];
       
       vessels.forEach((vessel) => {
-        if (!vessel.position) return;
+        if (!vessel.position) {
+          if (import.meta.env.DEV) {
+            console.warn('[OpsMapPanel] Vessel has no position data:', {
+              vesselId: vessel.id,
+              vesselName: vessel.name,
+            });
+          }
+          return;
+        }
         
-        // Debug: Log raw position data from API
-        console.log('[OpsMapPanel] Raw vessel position from API:', {
-          vesselId: vessel.id,
-          vesselName: vessel.name,
-          rawPosition: vessel.position,
-        });
+        // Debug: Log raw position data from API (development mode only)
+        if (import.meta.env.DEV) {
+          console.log('[OpsMapPanel] Raw vessel position from API:', {
+            vesselId: vessel.id,
+            vesselName: vessel.name,
+            rawPosition: vessel.position,
+            positionKeys: Object.keys(vessel.position),
+          });
+        }
         
         // Normalize and validate coordinates (same logic as MapView)
         const normalizedPos = normalizeVesselPosition({
@@ -398,22 +483,30 @@ function OpsMapPanel({ vessels, geofences, opsSites, onVesselClick }) {
         });
         
         if (!normalizedPos) {
-          console.warn('[OpsMapPanel] Skipping vessel due to invalid coordinates:', {
-            vesselId: vessel.id,
-            vesselName: vessel.name,
-            position: vessel.position,
-          });
+          if (import.meta.env.DEV) {
+            console.warn('[OpsMapPanel] Skipping vessel due to invalid coordinates:', {
+              vesselId: vessel.id,
+              vesselName: vessel.name,
+              position: vessel.position,
+            });
+          }
           return;
         }
         
-        // Debug: Log normalized coordinates
-        console.log('[OpsMapPanel] Normalized coordinates for plotting:', {
-          vesselId: vessel.id,
-          vesselName: vessel.name,
-          normalized: normalizedPos,
-          willPlotAt: [normalizedPos.lat, normalizedPos.lon],
-        });
+        // Debug: Log normalized coordinates and Leaflet marker creation (development mode only)
+        if (import.meta.env.DEV) {
+          console.log('[OpsMapPanel] Creating Leaflet marker:', {
+            vesselId: vessel.id,
+            vesselName: vessel.name,
+            normalized: normalizedPos,
+            leafletFormat: [normalizedPos.lat, normalizedPos.lon], // [latitude, longitude]
+            note: 'Leaflet requires [lat, lon] format',
+          });
+        }
 
+        // CRITICAL: Leaflet marker requires [latitude, longitude] format
+        // normalizedPos.lat = latitude (-90 to 90)
+        // normalizedPos.lon = longitude (-180 to 180)
         const icon = createVesselIcon(vessel.status, 16);
         const marker = L.marker([normalizedPos.lat, normalizedPos.lon], { icon })
           .addTo(map);
