@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useI18n } from '../utils/useI18n';
 import { api } from '../utils/api';
-import DashboardMap from '../components/map/DashboardMap';
+import DashboardMapMapLibre from '../components/map/DashboardMapMapLibre';
 import OpsKpiBar from '../modules/dashboard/OpsKpiBar';
 import OpsEventFeed from '../modules/dashboard/OpsEventFeed';
 import OpsStatsPanel from '../modules/dashboard/OpsStatsPanel';
@@ -64,7 +64,7 @@ function Dashboard() {
     <div className={styles.dashboard}>
       {/* Full-screen Map Background */}
       <div className={styles.mapBackground}>
-        <DashboardMap
+        <DashboardMapMapLibre
           vessels={activeVessels}
           geofences={geofences}
           opsSites={opsSites}
