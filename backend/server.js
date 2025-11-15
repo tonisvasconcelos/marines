@@ -35,9 +35,21 @@ const getAllowedOrigins = () => {
     origins.push(...process.env.FRONTEND_URLS.split(',').map(url => url.trim()));
   }
   
+  // Common Vercel deployment URLs (add these if not already in FRONTEND_URL)
+  const vercelUrls = [
+    'https://marines-v9gg.vercel.app',
+    'https://marines-app-frontend.vercel.app',
+  ];
+  vercelUrls.forEach(url => {
+    if (!origins.includes(url)) {
+      origins.push(url);
+    }
+  });
+  
   // Local development
   if (process.env.NODE_ENV !== 'production') {
     origins.push('http://localhost:3000');
+    origins.push('http://localhost:5173'); // Vite default port
   }
   
   return origins.length > 0 ? origins : ['http://localhost:3000'];
@@ -55,16 +67,24 @@ const corsOptions = {
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.warn(`CORS blocked origin: ${origin}. Allowed: ${allowedOrigins.join(', ')}`);
+      console.warn(`CORS blocked origin: ${origin}`);
+      console.warn(`Allowed origins: ${allowedOrigins.join(', ')}`);
       callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204, // Some legacy browsers (IE11, various SmartTVs) choke on 204
 };
 
+// Apply CORS middleware
 app.use(cors(corsOptions));
+
+// Explicitly handle OPTIONS requests for all routes (additional safety)
+app.options('*', cors(corsOptions));
 app.use(express.json());
 
 // Request logging middleware
