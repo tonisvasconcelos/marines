@@ -8,6 +8,11 @@ const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-key-change-in-productio
  * All subsequent routes must use req.tenantId for data access
  */
 export function authenticateToken(req, res, next) {
+  // Skip authentication for OPTIONS requests (CORS preflight)
+  if (req.method === 'OPTIONS') {
+    return next();
+  }
+  
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
