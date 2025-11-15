@@ -94,21 +94,43 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // Explicitly handle OPTIONS requests for all routes (critical for preflight)
-// This ensures preflight requests are handled even if cors middleware doesn't catch them
-app.options('*', cors(corsOptions), (req, res) => {
-  console.log(`[CORS] Handling OPTIONS preflight for: ${req.path} from origin: ${req.headers.origin}`);
-  // The cors middleware should have already set headers, but ensure they're set
+// This MUST be before any route handlers and must always respond with proper headers
+app.options('*', (req, res) => {
   const origin = req.headers.origin;
   const allowedOrigins = getAllowedOrigins();
   
+  console.log(`[CORS] OPTIONS preflight for: ${req.path}`);
+  console.log(`[CORS] Origin: ${origin}`);
+  console.log(`[CORS] Allowed origins: ${allowedOrigins.join(', ')}`);
+  
+  // Always set CORS headers for preflight, even if origin check fails (for debugging)
   if (origin && allowedOrigins.includes(origin)) {
     res.header('Access-Control-Allow-Origin', origin);
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
     res.header('Access-Control-Allow-Credentials', 'true');
     res.header('Access-Control-Max-Age', '86400'); // Cache preflight for 24 hours
+    console.log(`[CORS] Preflight allowed for origin: ${origin}`);
+  } else if (origin) {
+    // Log blocked origin
+    console.warn(`[CORS] Preflight blocked for origin: ${origin}`);
+    console.warn(`[CORS] This origin is not in the allowed list. Check Railway environment variables.`);
+    // TEMPORARILY: Allow all origins in preflight to debug (remove after fixing)
+    // This ensures we can see if the issue is origin checking or something else
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    console.warn(`[CORS] TEMPORARILY allowing preflight for debugging - FIX THIS IN PRODUCTION`);
+  } else {
+    // No origin header (e.g., same-origin request or mobile app)
+    console.log(`[CORS] Preflight with no origin - allowing`);
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
   }
-  res.sendStatus(200);
+  
+  return res.status(200).end();
 });
 app.use(express.json());
 
