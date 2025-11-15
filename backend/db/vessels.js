@@ -1,15 +1,31 @@
 /**
  * Database functions for Vessels
  * Replaces mock data with PostgreSQL persistence
+ * 
+ * SECURITY: All functions enforce tenant isolation by requiring tenantId parameter
+ * and filtering all queries by tenant_id. This ensures multi-tenant data segregation.
  */
 
 import { query, getClient } from './connection.js';
 
 /**
+ * Validate tenant ID is provided (security check)
+ */
+function validateTenantId(tenantId, operation = 'operation') {
+  if (!tenantId || typeof tenantId !== 'string' || tenantId.trim() === '') {
+    throw new Error(`Tenant ID is required for ${operation}. This is a security requirement.`);
+  }
+}
+
+/**
  * Get all vessels for a tenant
+ * SECURITY: Only returns vessels for the specified tenant
  */
 export async function getVessels(tenantId) {
+  validateTenantId(tenantId, 'getVessels');
+  
   try {
+    // CRITICAL: Always filter by tenant_id to ensure data isolation
     const result = await query(
       'SELECT * FROM vessels WHERE tenant_id = $1 ORDER BY created_at DESC',
       [tenantId]
@@ -42,9 +58,17 @@ export async function getVessels(tenantId) {
 
 /**
  * Get a single vessel by ID
+ * SECURITY: Verifies vessel belongs to the specified tenant
  */
 export async function getVesselById(vesselId, tenantId) {
+  validateTenantId(tenantId, 'getVesselById');
+  
+  if (!vesselId) {
+    throw new Error('Vessel ID is required');
+  }
+  
   try {
+    // CRITICAL: Always filter by both id AND tenant_id to prevent cross-tenant access
     const result = await query(
       'SELECT * FROM vessels WHERE id = $1 AND tenant_id = $2',
       [vesselId, tenantId]
@@ -80,12 +104,17 @@ export async function getVesselById(vesselId, tenantId) {
 
 /**
  * Create a new vessel
+ * SECURITY: Ensures vessel is created with the correct tenant_id
  */
 export async function createVessel(tenantId, vesselData) {
+  validateTenantId(tenantId, 'createVessel');
+  
   try {
     const vesselId = `vessel-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
     const now = new Date().toISOString();
     
+    // CRITICAL: tenant_id is explicitly set from the authenticated user's tenant
+    // Never trust tenant_id from vesselData to prevent tenant spoofing
     const result = await query(
       `INSERT INTO vessels (
         id, tenant_id, name, imo, mmsi, call_sign, flag, 
@@ -95,7 +124,7 @@ export async function createVessel(tenantId, vesselData) {
       RETURNING *`,
       [
         vesselId,
-        tenantId,
+        tenantId, // SECURITY: Use tenantId from authenticated session, not from input
         vesselData.name || '',
         vesselData.imo || null,
         vesselData.mmsi || null,
@@ -141,8 +170,15 @@ export async function createVessel(tenantId, vesselData) {
 
 /**
  * Update a vessel
+ * SECURITY: Verifies vessel belongs to tenant before updating
  */
 export async function updateVessel(vesselId, tenantId, vesselData) {
+  validateTenantId(tenantId, 'updateVessel');
+  
+  if (!vesselId) {
+    throw new Error('Vessel ID is required');
+  }
+  
   try {
     const now = new Date().toISOString();
     
@@ -216,9 +252,17 @@ export async function updateVessel(vesselId, tenantId, vesselData) {
 
 /**
  * Delete a vessel
+ * SECURITY: Verifies vessel belongs to tenant before deletion
  */
 export async function deleteVessel(vesselId, tenantId) {
+  validateTenantId(tenantId, 'deleteVessel');
+  
+  if (!vesselId) {
+    throw new Error('Vessel ID is required');
+  }
+  
   try {
+    // CRITICAL: Always filter by both id AND tenant_id to prevent cross-tenant deletion
     const result = await query(
       'DELETE FROM vessels WHERE id = $1 AND tenant_id = $2 RETURNING id',
       [vesselId, tenantId]
@@ -234,8 +278,15 @@ export async function deleteVessel(vesselId, tenantId) {
 
 /**
  * Store vessel position in history
+ * SECURITY: Ensures position is stored with correct tenant_id
  */
 export async function storePositionHistory(vesselId, tenantId, positionData) {
+  validateTenantId(tenantId, 'storePositionHistory');
+  
+  if (!vesselId) {
+    throw new Error('Vessel ID is required');
+  }
+  
   try {
     const positionId = `pos-${vesselId}-${Date.now()}`;
     
@@ -283,9 +334,17 @@ export async function storePositionHistory(vesselId, tenantId, positionData) {
 
 /**
  * Get vessel position history
+ * SECURITY: Only returns position history for the specified tenant
  */
 export async function getPositionHistory(vesselId, tenantId, limit = 100) {
+  validateTenantId(tenantId, 'getPositionHistory');
+  
+  if (!vesselId) {
+    throw new Error('Vessel ID is required');
+  }
+  
   try {
+    // CRITICAL: Always filter by both vessel_id AND tenant_id
     const result = await query(
       `SELECT * FROM vessel_position_history 
        WHERE vessel_id = $1 AND tenant_id = $2 
