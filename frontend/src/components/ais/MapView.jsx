@@ -32,24 +32,32 @@ function MapView({ position, track, vesselName }) {
 
     // Update position marker
     if (position) {
-      // Normalize and validate coordinates
-      let lat = position.lat || position.Lat || position.latitude || position.Latitude;
-      let lon = position.lon || position.Lon || position.longitude || position.Longitude;
+      // Extract coordinates from various field name formats
+      let lat = position.lat ?? position.latitude ?? position.Lat ?? position.Latitude ?? null;
+      let lon = position.lon ?? position.longitude ?? position.Lon ?? position.Longitude ?? null;
       
-      // Convert to numbers if they're strings
+      // Convert to numbers if they're strings (use parseFloat to preserve decimals)
       if (typeof lat === 'string') lat = parseFloat(lat);
       if (typeof lon === 'string') lon = parseFloat(lon);
       
+      // Convert to numbers if not already
+      if (lat !== null) lat = Number(lat);
+      if (lon !== null) lon = Number(lon);
+      
       // Validate coordinates are valid numbers and within valid ranges
-      if (lat != null && lon != null && !isNaN(lat) && !isNaN(lon)) {
+      if (lat != null && lon != null && isFinite(lat) && isFinite(lon)) {
         // Validate latitude is between -90 and 90
         if (lat < -90 || lat > 90) {
-          console.error('Invalid latitude:', lat, 'Position data:', position);
+          if (import.meta.env.DEV) {
+            console.error('[MapView] Invalid latitude:', lat, 'Position data:', position);
+          }
           return;
         }
         // Validate longitude is between -180 and 180
         if (lon < -180 || lon > 180) {
-          console.error('Invalid longitude:', lon, 'Position data:', position);
+          if (import.meta.env.DEV) {
+            console.error('[MapView] Invalid longitude:', lon, 'Position data:', position);
+          }
           return;
         }
         
@@ -58,16 +66,28 @@ function MapView({ position, track, vesselName }) {
           map.removeLayer(markerRef.current);
         }
 
-        // Create marker with validated coordinates
-        // Leaflet expects [lat, lon] format
+        // CRITICAL: Create marker with validated coordinates
+        // Leaflet expects [latitude, longitude] format
+        // lat = latitude (-90 to 90), lon = longitude (-180 to 180)
+        if (import.meta.env.DEV) {
+          console.log('[MapView] Creating marker at:', {
+            lat,
+            lon,
+            leafletFormat: [lat, lon],
+            vesselName: vesselName || 'Unknown',
+          });
+        }
+        
         markerRef.current = L.marker([lat, lon])
           .addTo(map)
           .bindPopup(vesselName || 'Vessel Position');
 
-        // Center map on vessel position
+        // Center map on vessel position (also [lat, lon] format)
         map.setView([lat, lon], 10);
       } else {
-        console.warn('Invalid position coordinates:', { lat, lon, position });
+        if (import.meta.env.DEV) {
+          console.warn('[MapView] Invalid position coordinates:', { lat, lon, position });
+        }
       }
     }
 
@@ -80,17 +100,23 @@ function MapView({ position, track, vesselName }) {
       // Normalize and validate track points
       const trackPoints = track
         .map((p) => {
-          let lat = p.lat || p.Lat || p.latitude || p.Latitude;
-          let lon = p.lon || p.Lon || p.longitude || p.Longitude;
+          // Extract coordinates from various formats
+          let lat = p.lat ?? p.latitude ?? p.Lat ?? p.Latitude ?? null;
+          let lon = p.lon ?? p.longitude ?? p.Lon ?? p.Longitude ?? null;
           
-          // Convert to numbers if they're strings
+          // Convert to numbers if strings (use parseFloat to preserve decimals)
           if (typeof lat === 'string') lat = parseFloat(lat);
           if (typeof lon === 'string') lon = parseFloat(lon);
           
-          // Validate coordinates
-          if (lat != null && lon != null && !isNaN(lat) && !isNaN(lon) &&
+          // Convert to numbers if not already
+          if (lat !== null) lat = Number(lat);
+          if (lon !== null) lon = Number(lon);
+          
+          // Validate coordinates are valid numbers and within valid ranges
+          // CRITICAL: Return [lat, lon] format for Leaflet polyline
+          if (lat != null && lon != null && isFinite(lat) && isFinite(lon) &&
               lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
-            return [lat, lon];
+            return [lat, lon]; // Leaflet format: [latitude, longitude]
           }
           return null;
         })
