@@ -196,7 +196,13 @@ function DashboardMap({ vessels, geofences, opsSites, onVesselClick }) {
 
   // Update vessel markers
   useEffect(() => {
-    if (!mapInstanceRef.current) return;
+    // Wait for map to be initialized
+    if (!mapInstanceRef.current) {
+      if (import.meta.env.DEV) {
+        console.warn('[DashboardMap] Map not initialized yet, waiting...');
+      }
+      return;
+    }
     
     // Debug logging
     if (import.meta.env.DEV) {
