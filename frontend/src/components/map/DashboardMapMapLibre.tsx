@@ -14,7 +14,7 @@ import { MeasurementTool } from './MeasurementTool';
 import { MiniPopup } from './MiniPopup';
 import { VesselSearch } from './VesselSearch';
 import { normalizeVesselPosition } from '../../utils/coordinateUtils';
-import { getVesselsInZone, type Bounds } from '../../api/myshiptracking';
+import { getVesselsInZone } from '../../api/myshiptracking';
 import { useQuery } from '@tanstack/react-query';
 import styles from './DashboardMap.module.css';
 
@@ -26,7 +26,7 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick }) {
   const [baseLayer, setBaseLayer] = useState('standard');
   const [overlays, setOverlays] = useState({});
   const [measurementEnabled, setMeasurementEnabled] = useState(false);
-  const [mapBounds, setMapBounds] = useState<Bounds | null>(null);
+  const [mapBounds, setMapBounds] = useState(null);
   const hasUserInteractedRef = useRef(false);
   const initialBoundsSetRef = useRef(false);
 

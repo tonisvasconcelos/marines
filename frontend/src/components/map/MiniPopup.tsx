@@ -8,7 +8,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { FiX, FiExternalLink, FiMap, FiClock } from 'react-icons/fi';
-import { getVesselStatus, getVesselsNearby, getVesselTrack, type VesselStatus, type NearbyVessel, type TrackPoint } from '../../api/myshiptracking';
+import { getVesselStatus, getVesselsNearby, getVesselTrack } from '../../api/myshiptracking';
 import styles from './MiniPopup.module.css';
 
 interface MiniPopupProps {
