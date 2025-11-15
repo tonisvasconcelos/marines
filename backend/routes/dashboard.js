@@ -268,10 +268,22 @@ router.get('/active-vessels', async (req, res) => {
 });
 
 // GET /api/dashboard/events - Get recent tactical events
-router.get('/events', (req, res) => {
+router.get('/events', async (req, res) => {
   const { tenantId } = req;
   const portCalls = getMockPortCalls(tenantId);
-  const vessels = getMockVessels(tenantId);
+  
+  // Get vessels from database (with fallback to mock data)
+  let vessels;
+  try {
+    vessels = await vesselDb.getVessels(tenantId);
+  if (vessels.length === 0) {
+      vessels = getMockVessels(tenantId);
+    }
+  } catch (error) {
+    console.error('Error fetching vessels from database, using mock data:', error);
+    vessels = getMockVessels(tenantId);
+  }
+  
   const now = new Date();
   
   const events = [];
