@@ -192,23 +192,58 @@ export function getMockPortCalls(tenantId) {
   return mockPortCalls.filter((pc) => pc.tenantId === tenantId);
 }
 
+/**
+ * Generate a position in maritime waters (not on land)
+ * For Rio de Janeiro area, ensures positions are in Guanabara Bay or offshore
+ */
+function generateMaritimePosition(baseLat = -22.9068, baseLon = -43.1729) {
+  // Define safe maritime areas (water only) around Rio de Janeiro
+  // Guanabara Bay and offshore areas
+  const maritimeAreas = [
+    // Guanabara Bay - inner bay
+    { lat: -22.88, lon: -43.15, radius: 0.08 },
+    // Guanabara Bay - central
+    { lat: -22.90, lon: -43.12, radius: 0.06 },
+    // Guanabara Bay - entrance
+    { lat: -22.92, lon: -43.10, radius: 0.05 },
+    // Offshore - south of Rio
+    { lat: -23.05, lon: -43.20, radius: 0.10 },
+    // Offshore - east of Niterói
+    { lat: -22.95, lon: -43.00, radius: 0.12 },
+  ];
+  
+  // Randomly select a maritime area
+  const area = maritimeAreas[Math.floor(Math.random() * maritimeAreas.length)];
+  
+  // Generate position within the selected area (ensuring it's in water)
+  const angle = Math.random() * 2 * Math.PI;
+  const distance = Math.random() * area.radius;
+  
+  const lat = area.lat + (distance * Math.cos(angle) * 0.5); // Smaller variation in lat
+  const lon = area.lon + (distance * Math.sin(angle));
+  
+  return { lat, lon };
+}
+
 export function getMockAisPosition(vesselId) {
-  if (!mockAisPositions[vesselId]) {
-    // Generate mock position
-    mockAisPositions[vesselId] = {
-      id: `ais-${vesselId}`,
-      tenantId: 'tenant-1',
-      vesselId,
-      timestamp: new Date().toISOString(),
-      lat: -22.9068 + (Math.random() - 0.5) * 0.1,
-      lon: -43.1729 + (Math.random() - 0.5) * 0.1,
-      sog: 12.5 + Math.random() * 5,
-      cog: Math.random() * 360,
-      heading: Math.random() * 360,
-      navStatus: 'under way',
-      source: 'mock',
-    };
-  }
+  // Always regenerate to ensure positions are in maritime waters
+  // This ensures vessels are never plotted on land
+  const maritimePos = generateMaritimePosition();
+  
+  mockAisPositions[vesselId] = {
+    id: `ais-${vesselId}`,
+    tenantId: 'tenant-1',
+    vesselId,
+    timestamp: new Date().toISOString(),
+    lat: maritimePos.lat,
+    lon: maritimePos.lon,
+    sog: 12.5 + Math.random() * 5,
+    cog: Math.random() * 360,
+    heading: Math.random() * 360,
+    navStatus: 'under way',
+    source: 'mock',
+  };
+  
   return mockAisPositions[vesselId];
 }
 
@@ -217,16 +252,39 @@ export function getMockAisTrack(vesselId, hours = 24) {
   const now = Date.now();
   const interval = (hours * 60 * 60 * 1000) / 20; // 20 points
 
+  // Start from a maritime position
+  let currentPos = generateMaritimePosition();
+  
   for (let i = 0; i < 20; i++) {
+    // Move position slightly (simulating vessel movement) but keep it in water
+    const course = Math.random() * 360;
+    const speed = 10 + Math.random() * 8; // knots
+    const distance = (speed * interval) / (1000 * 60 * 60); // Convert to degrees (approx)
+    
+    // Move in the direction of course, but keep within maritime bounds
+    const latOffset = (distance * Math.cos(course * Math.PI / 180)) * 0.01;
+    const lonOffset = (distance * Math.sin(course * Math.PI / 180)) * 0.01;
+    
+    currentPos = {
+      lat: Math.max(-23.2, Math.min(-22.7, currentPos.lat + latOffset)),
+      lon: Math.max(-43.4, Math.min(-42.8, currentPos.lon + lonOffset)),
+    };
+    
+    // Ensure position is still in maritime area
+    if (i % 5 === 0) {
+      // Every 5th point, regenerate from a maritime area to ensure we stay in water
+      currentPos = generateMaritimePosition();
+    }
+    
     positions.push({
       id: `track-${vesselId}-${i}`,
       tenantId: 'tenant-1',
       vesselId,
       timestamp: new Date(now - (20 - i) * interval).toISOString(),
-      lat: -22.9068 + (Math.random() - 0.5) * 0.5,
-      lon: -43.1729 + (Math.random() - 0.5) * 0.5,
-      sog: 10 + Math.random() * 8,
-      cog: Math.random() * 360,
+      lat: currentPos.lat,
+      lon: currentPos.lon,
+      sog: speed,
+      cog: course,
       navStatus: 'under way',
       source: 'mock',
     });

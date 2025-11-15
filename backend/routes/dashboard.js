@@ -92,12 +92,21 @@ router.get('/active-vessels', (req, res) => {
     if (portCall) {
       if (portCall.status === 'IN_PROGRESS') {
         status = 'IN_PORT';
-        // Get position from port or ops site
-        position = {
-          lat: -22.9068, // Default to Rio
-          lon: -43.1729,
-          timestamp: new Date().toISOString(),
-        };
+        // Get position from port or ops site - use port coordinates if available, otherwise maritime position
+        if (portCall.port?.coordinates) {
+          position = {
+            lat: portCall.port.coordinates.lat,
+            lon: portCall.port.coordinates.lon,
+            timestamp: new Date().toISOString(),
+          };
+        } else {
+          // Use a position in Guanabara Bay (in port area)
+          position = {
+            lat: -22.90 + (Math.random() - 0.5) * 0.03, // Inner bay area
+            lon: -43.13 + (Math.random() - 0.5) * 0.03,
+            timestamp: new Date().toISOString(),
+          };
+        }
       } else if (portCall.status === 'PLANNED') {
         status = 'INBOUND';
         // Get AIS position
