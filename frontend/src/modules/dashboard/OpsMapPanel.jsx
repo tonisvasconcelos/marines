@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import 'leaflet.gridlayer.googlemutant';
+// Note: leaflet.gridlayer.googlemutant is loaded dynamically to avoid build issues
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useI18n } from '../../utils/useI18n';
 import { api } from '../../utils/api';
@@ -74,50 +74,68 @@ function OpsMapPanel({ vessels, geofences, opsSites, onVesselClick }) {
       // Use Google Maps if API key is available, otherwise fall back to OpenStreetMap
       const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
       
-      if (googleMapsApiKey) {
-        // Check if Google Maps API is already loaded
-        if (window.google && window.google.maps) {
-          // Use Google Maps with Leaflet plugin
+      if (googleMapsApiKey && typeof window !== 'undefined') {
+        // Dynamically load Google Maps plugin only in browser
+        const loadGoogleMaps = async () => {
           try {
-            L.gridLayer.googleMutant({
-              type: 'roadmap', // Options: 'roadmap', 'satellite', 'hybrid', 'terrain'
-              maxZoom: 19,
-            }).addTo(mapInstanceRef.current);
-            return;
-          } catch (error) {
-            console.warn('Failed to initialize Google Maps, falling back to OpenStreetMap:', error);
-            loadOpenStreetMap();
-            return;
-          }
-        } else {
-          // Load Google Maps API script
-          const script = document.createElement('script');
-          script.src = `https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}`;
-          script.async = true;
-          script.defer = true;
-          script.onload = () => {
-            // Wait a bit for the plugin to be ready
-            setTimeout(() => {
+            // Dynamically import the plugin to avoid build-time issues
+            await import('leaflet.gridlayer.googlemutant');
+            
+            // Check if Google Maps API is already loaded
+            if (window.google && window.google.maps) {
+              // Use Google Maps with Leaflet plugin
               try {
-                if (mapInstanceRef.current) {
+                if (L.gridLayer && L.gridLayer.googleMutant) {
                   L.gridLayer.googleMutant({
-                    type: 'roadmap',
+                    type: 'roadmap', // Options: 'roadmap', 'satellite', 'hybrid', 'terrain'
                     maxZoom: 19,
                   }).addTo(mapInstanceRef.current);
+                  return;
                 }
               } catch (error) {
-                console.warn('Failed to load Google Maps, falling back to OpenStreetMap:', error);
+                console.warn('Failed to initialize Google Maps, falling back to OpenStreetMap:', error);
                 loadOpenStreetMap();
+                return;
               }
-            }, 100);
-          };
-          script.onerror = () => {
-            console.warn('Failed to load Google Maps API, falling back to OpenStreetMap');
+            } else {
+              // Load Google Maps API script
+              const script = document.createElement('script');
+              script.src = `https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}`;
+              script.async = true;
+              script.defer = true;
+              script.onload = async () => {
+                // Wait for Google Maps API and plugin to be ready
+                setTimeout(async () => {
+                  try {
+                    if (mapInstanceRef.current && L.gridLayer && L.gridLayer.googleMutant) {
+                      L.gridLayer.googleMutant({
+                        type: 'roadmap',
+                        maxZoom: 19,
+                      }).addTo(mapInstanceRef.current);
+                    } else {
+                      loadOpenStreetMap();
+                    }
+                  } catch (error) {
+                    console.warn('Failed to load Google Maps, falling back to OpenStreetMap:', error);
+                    loadOpenStreetMap();
+                  }
+                }, 100);
+              };
+              script.onerror = () => {
+                console.warn('Failed to load Google Maps API, falling back to OpenStreetMap');
+                loadOpenStreetMap();
+              };
+              document.head.appendChild(script);
+              return;
+            }
+          } catch (error) {
+            console.warn('Failed to load Google Maps plugin, falling back to OpenStreetMap:', error);
             loadOpenStreetMap();
-          };
-          document.head.appendChild(script);
-          return;
-        }
+          }
+        };
+        
+        loadGoogleMaps();
+        return;
       }
       
       // Fallback to OpenStreetMap
@@ -135,9 +153,10 @@ function OpsMapPanel({ vessels, geofences, opsSites, onVesselClick }) {
 
     initializeMap();
 
-      const map = mapInstanceRef.current;
+    const map = mapInstanceRef.current;
 
-      // Track user interactions (zoom, pan, drag)
+    // Track user interactions (zoom, pan, drag)
+    if (map) {
       map.on('zoomstart', () => {
         hasUserInteractedRef.current = true;
       });
