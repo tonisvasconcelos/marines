@@ -49,26 +49,29 @@ async function makeProxyRequest<T>(
   
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
-    if (import.meta.env.DEV) {
-      console.log('[MyShipTracking API] Adding Authorization header with token:', {
-        tokenLength: token.length,
-        tokenPrefix: token.substring(0, 20) + '...',
-      });
-    }
+    // Always log to help debug production issues
+    console.log('[MyShipTracking API] ✅ Authorization header added:', {
+      tokenLength: token.length,
+      tokenPrefix: token.substring(0, 20) + '...',
+      headerValue: `Bearer ${token.substring(0, 20)}...`,
+    });
   } else {
-    console.error('[MyShipTracking API] No authentication token found in localStorage!');
-    console.error('[MyShipTracking API] Available localStorage keys:', Object.keys(localStorage));
-    console.warn('[MyShipTracking API] Requests will fail with 401 Unauthorized');
+    // Critical error - always log
+    console.error('[MyShipTracking API] ❌ No authentication token found!');
+    console.error('[MyShipTracking API] localStorage keys:', Object.keys(localStorage));
+    console.error('[MyShipTracking API] This will cause 401 Unauthorized errors');
+    console.error('[MyShipTracking API] Please ensure you are logged in');
   }
 
   try {
-    if (import.meta.env.DEV) {
-      console.log('[MyShipTracking API] Making request:', {
-        url: url.toString(),
-        hasAuthHeader: !!headers['Authorization'],
-        headers: Object.keys(headers),
-      });
-    }
+    // Always log request details to debug auth issues
+    console.log('[MyShipTracking API] Making request:', {
+      url: url.toString(),
+      hasAuthHeader: !!headers['Authorization'],
+      authHeaderPresent: 'Authorization' in headers,
+      headerKeys: Object.keys(headers),
+      tokenAvailable: !!token,
+    });
 
     const response = await fetch(url.toString(), {
       method: 'GET',
@@ -80,11 +83,17 @@ async function makeProxyRequest<T>(
       const errorData = await response.json().catch(() => ({ error: response.statusText }));
       
       if (response.status === 401) {
-        console.error('[MyShipTracking API] 401 Unauthorized - Authentication failed:', {
+        console.error('[MyShipTracking API] ❌ 401 Unauthorized - Authentication failed!');
+        console.error('[MyShipTracking API] Request details:', {
           endpoint: url.toString(),
           hasToken: !!token,
+          tokenLength: token?.length || 0,
+          authHeaderInRequest: 'Authorization' in headers,
+          requestHeaders: Object.keys(headers),
+          responseStatus: response.status,
           responseHeaders: Object.fromEntries(response.headers.entries()),
         });
+        console.error('[MyShipTracking API] Check if token is valid and not expired');
       }
       
       throw new Error(errorData.error || errorData.message || `API error: ${response.status}`);
