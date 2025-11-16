@@ -6,7 +6,7 @@ import { api } from '../../utils/api';
 import Card from '../../components/ui/Card';
 import KpiCard from '../../components/ui/KpiCard';
 import MapView from '../../components/ais/MapView';
-import { FiSearch, FiCamera, FiTrash2 } from 'react-icons/fi';
+import { FiSearch, FiCamera, FiTrash2, FiMapPin } from 'react-icons/fi';
 import styles from './VesselDetail.module.css';
 
 function VesselDetail() {
@@ -14,6 +14,7 @@ function VesselDetail() {
   const navigate = useNavigate();
   const { t } = useI18n();
   const queryClient = useQueryClient();
+  const [showPositionHistory, setShowPositionHistory] = useState(false);
 
   // Fetch vessel data (includes AIS enrichment)
   const { data: vessel, isLoading } = useQuery({
@@ -361,22 +362,85 @@ function VesselDetail() {
         </Card>
       </div>
 
-      {/* AIS Telemetry Section */}
+      {/* AIS Telemetry / Position History Tabs Section */}
       <div className={styles.section}>
         <Card>
-          <h2>AIS Telemetry</h2>
-          <div className={styles.detailsGrid}>
-            <TelemetryItem label="Longitude" value={aisPositionData.longitude ? aisPositionData.longitude.toFixed(5) : '---'} />
-            <TelemetryItem label="Latitude" value={aisPositionData.latitude ? aisPositionData.latitude.toFixed(5) : '---'} />
-            <TelemetryItem label="Speed" value={aisPositionData.speed ? `${aisPositionData.speed.toFixed(1)} kn` : '⚓'} />
-            <TelemetryItem label="Course" value={aisPositionData.course ? `${aisPositionData.course.toFixed(0)}°` : '---'} />
-            <TelemetryItem label="Heading" value={aisPositionData.heading ? `${aisPositionData.heading.toFixed(0)}°` : '---'} />
-            <TelemetryItem label="Navigation Status" value={aisPositionData.navStatus || '---'} />
-            <TelemetryItem label="Area" value={aisPositionData.area || '---'} />
-            <TelemetryItem label="AIS Station" value={aisPositionData.station || '---'} />
-            <TelemetryItem label="Last Position Received" value={aisPositionData.timestamp ? formatTimeAgo(new Date(aisPositionData.timestamp)) : '---'} />
-            <TelemetryItem label="AIS Source" value={aisPositionData.source || '---'} />
+          <div className={styles.tabs}>
+            <button
+              className={`${styles.tab} ${!showPositionHistory ? styles.activeTab : ''}`}
+              onClick={() => setShowPositionHistory(false)}
+            >
+              AIS Telemetry
+            </button>
+            <button
+              className={`${styles.tab} ${showPositionHistory ? styles.activeTab : ''}`}
+              onClick={() => setShowPositionHistory(true)}
+            >
+              <FiMapPin size={16} style={{ marginRight: '8px', verticalAlign: 'middle' }} />
+              Last Vessel Positions
+            </button>
           </div>
+
+          {!showPositionHistory ? (
+            <>
+              <h2>AIS Telemetry</h2>
+              <div className={styles.detailsGrid}>
+                <TelemetryItem label="Longitude" value={aisPositionData.longitude ? aisPositionData.longitude.toFixed(5) : '---'} />
+                <TelemetryItem label="Latitude" value={aisPositionData.latitude ? aisPositionData.latitude.toFixed(5) : '---'} />
+                <TelemetryItem label="Speed" value={aisPositionData.speed ? `${aisPositionData.speed.toFixed(1)} kn` : '⚓'} />
+                <TelemetryItem label="Course" value={aisPositionData.course ? `${aisPositionData.course.toFixed(0)}°` : '---'} />
+                <TelemetryItem label="Heading" value={aisPositionData.heading ? `${aisPositionData.heading.toFixed(0)}°` : '---'} />
+                <TelemetryItem label="Navigation Status" value={aisPositionData.navStatus || '---'} />
+                <TelemetryItem label="Area" value={aisPositionData.area || '---'} />
+                <TelemetryItem label="AIS Station" value={aisPositionData.station || '---'} />
+                <TelemetryItem label="Last Position Received" value={aisPositionData.timestamp ? formatTimeAgo(new Date(aisPositionData.timestamp)) : '---'} />
+                <TelemetryItem label="AIS Source" value={aisPositionData.source || '---'} />
+              </div>
+            </>
+          ) : (
+            <>
+              <h2>Last Vessel Positions</h2>
+              {positionHistory && Array.isArray(positionHistory) && positionHistory.length > 0 ? (
+                <div className={styles.positionHistoryTable}>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Date & Time</th>
+                        <th>Latitude</th>
+                        <th>Longitude</th>
+                        <th>Vessel Name</th>
+                        <th>IMO</th>
+                        <th>Speed (kn)</th>
+                        <th>Course (°)</th>
+                        <th>Heading (°)</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {positionHistory.map((pos) => (
+                        <tr key={pos.id}>
+                          <td>{pos.timestamp ? new Date(pos.timestamp).toLocaleString() : '---'}</td>
+                          <td>{pos.lat ? pos.lat.toFixed(6) : '---'}</td>
+                          <td>{pos.lon ? pos.lon.toFixed(6) : '---'}</td>
+                          <td>{vessel?.name || '---'}</td>
+                          <td>{vessel?.imo || '---'}</td>
+                          <td>{pos.sog ? pos.sog.toFixed(1) : '---'}</td>
+                          <td>{pos.cog ? pos.cog.toFixed(0) : '---'}</td>
+                          <td>{pos.heading ? pos.heading.toFixed(0) : '---'}</td>
+                          <td>{pos.navStatus || '---'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className={styles.emptyState}>
+                  <p>No position history available for this vessel.</p>
+                  <small>Position history will be recorded when AIS data is received.</small>
+                </div>
+              )}
+            </>
+          )}
         </Card>
       </div>
     </div>

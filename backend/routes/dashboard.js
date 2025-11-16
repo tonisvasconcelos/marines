@@ -131,9 +131,30 @@ router.get('/active-vessels', async (req, res) => {
      aisConfig.provider.toLowerCase() === 'my-ship-tracking' ||
      aisConfig.provider === 'myshiptracking');
   
-  // Helper function to get AIS position (tries real API first, falls back to mock)
+  // Helper function to get AIS position (tries stored position first, then real API, then mock)
   const getVesselPosition = async (vessel) => {
-    // Try real AIS API if configured (use normalized check)
+    // FIRST: Try to get latest stored position from database
+    try {
+      const storedPosition = await vesselDb.getLatestPosition(vessel.id, tenantId);
+      if (storedPosition && storedPosition.lat && storedPosition.lon) {
+        console.log(`[getVesselPosition] Using stored position for vessel ${vessel.id} (${vessel.name})`);
+        return {
+          lat: storedPosition.lat,
+          lon: storedPosition.lon,
+          timestamp: storedPosition.timestamp,
+          sog: storedPosition.sog,
+          cog: storedPosition.cog,
+          heading: storedPosition.heading,
+          navStatus: storedPosition.navStatus,
+          source: storedPosition.source || 'stored',
+        };
+      }
+    } catch (error) {
+      console.error(`[getVesselPosition] Error fetching stored position for vessel ${vessel.id}:`, error);
+      // Continue to try AIS API
+    }
+    
+    // SECOND: Try real AIS API if configured (use normalized check)
     if (isMyShipTrackingConfigured && aisConfig?.apiKey && aisConfig.apiKey.trim() !== '') {
       console.log(`[getVesselPosition] Attempting to fetch real AIS data for vessel ${vessel.id} (${vessel.name})`, {
         hasMmsi: !!vessel.mmsi,

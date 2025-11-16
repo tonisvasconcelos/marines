@@ -395,3 +395,44 @@ export async function getPositionHistory(vesselId, tenantId, limit = 100) {
   }
 }
 
+/**
+ * Get the latest position for a vessel from position history
+ * SECURITY: Only returns position for the specified tenant
+ */
+export async function getLatestPosition(vesselId, tenantId) {
+  validateTenantId(tenantId, 'getLatestPosition');
+  
+  if (!vesselId) {
+    return null;
+  }
+  
+  try {
+    const result = await query(
+      `SELECT * FROM vessel_position_history 
+       WHERE vessel_id = $1 AND tenant_id = $2 
+       ORDER BY timestamp DESC 
+       LIMIT 1`,
+      [vesselId, tenantId]
+    );
+    
+    if (result.rows.length === 0) {
+      return null;
+    }
+    
+    const row = result.rows[0];
+    return {
+      lat: parseFloat(row.lat),
+      lon: parseFloat(row.lon),
+      timestamp: row.timestamp,
+      sog: row.sog ? parseFloat(row.sog) : null,
+      cog: row.cog ? parseFloat(row.cog) : null,
+      heading: row.heading ? parseFloat(row.heading) : null,
+      navStatus: row.nav_status,
+      source: row.source,
+    };
+  } catch (error) {
+    console.error('Error fetching latest position from database:', error);
+    return null;
+  }
+}
+

@@ -178,7 +178,6 @@ router.post('/', async (req, res) => {
         
         if (aisData) {
           // Update vessel with AIS data if we have additional fields
-          // For now, just merge the data in the response
           newVessel = {
             ...newVessel,
             ...aisData,
@@ -186,6 +185,26 @@ router.post('/', async (req, res) => {
             id: newVessel.id,
             tenantId: newVessel.tenantId,
           };
+          
+          // CRITICAL: Store the position in position_history when vessel is created
+          if (aisData.lat !== undefined && aisData.lon !== undefined) {
+            try {
+              await vesselDb.storePositionHistory(newVessel.id, tenantId, {
+                lat: aisData.lat || aisData.Lat || aisData.latitude,
+                lon: aisData.lon || aisData.Lon || aisData.longitude,
+                timestamp: aisData.timestamp || new Date().toISOString(),
+                sog: aisData.sog || aisData.speed,
+                cog: aisData.cog || aisData.course,
+                heading: aisData.heading,
+                navStatus: aisData.navStatus || aisData.status,
+                source: 'ais',
+              });
+              console.log(`[Vessel Creation] Stored initial position for vessel ${newVessel.id}`);
+            } catch (posError) {
+              console.error('Failed to store initial position:', posError);
+              // Continue even if position storage fails
+            }
+          }
         }
       } catch (error) {
         console.error('Failed to fetch AIS data for new vessel:', error);
