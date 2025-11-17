@@ -148,12 +148,16 @@ export function MapEngine({
 
     // For raster layers (satellite), add as raster source
     if (styleConfig.rasterUrl) {
-      // Remove existing base source
-      if (map.getSource('base-tiles')) {
-        if (map.getLayer('base-layer')) {
-          map.removeLayer('base-layer');
+      // Remove existing base source (with safety checks)
+      try {
+        if (map.getSource && map.getSource('base-tiles')) {
+          if (map.getLayer && map.getLayer('base-layer')) {
+            map.removeLayer('base-layer');
+          }
+          if (map.removeSource) map.removeSource('base-tiles');
         }
-        map.removeSource('base-tiles');
+      } catch (error) {
+        console.warn('[MapEngine] Error removing base tiles:', error);
       }
 
       map.addSource('base-tiles', {
@@ -169,35 +173,47 @@ export function MapEngine({
       });
     } else {
       // For standard/nautical, use OSM tiles
-      if (!map.getSource('base-tiles')) {
-        map.addSource('base-tiles', {
-          type: 'raster',
-          tiles: [
-            'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
-            'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
-            'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
-          ],
-          tileSize: 256,
-          attribution: '© OpenStreetMap contributors',
-        });
+      try {
+        if (!map.getSource || !map.getSource('base-tiles')) {
+          if (map.addSource) {
+            map.addSource('base-tiles', {
+              type: 'raster',
+              tiles: [
+                'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
+              ],
+              tileSize: 256,
+              attribution: '© OpenStreetMap contributors',
+            });
+          }
 
-        if (!map.getLayer('base-layer')) {
-          map.addLayer({
-            id: 'base-layer',
-            type: 'raster',
-            source: 'base-tiles',
-          });
+          if (!map.getLayer || !map.getLayer('base-layer')) {
+            if (map.addLayer) {
+              map.addLayer({
+                id: 'base-layer',
+                type: 'raster',
+                source: 'base-tiles',
+              });
+            }
+          }
         }
+      } catch (error) {
+        console.warn('[MapEngine] Error adding base tiles:', error);
       }
     }
 
     // Add nautical overlay if needed
     if (layerId === 'nautical' && styleConfig.overlayUrl) {
-      if (map.getSource('nautical-overlay')) {
-        if (map.getLayer('nautical-overlay-layer')) {
-          map.removeLayer('nautical-overlay-layer');
+      try {
+        if (map.getSource && map.getSource('nautical-overlay')) {
+          if (map.getLayer && map.getLayer('nautical-overlay-layer')) {
+            map.removeLayer('nautical-overlay-layer');
+          }
+          if (map.removeSource) map.removeSource('nautical-overlay');
         }
-        map.removeSource('nautical-overlay');
+      } catch (error) {
+        console.warn('[MapEngine] Error removing nautical overlay:', error);
       }
 
       map.addSource('nautical-overlay', {

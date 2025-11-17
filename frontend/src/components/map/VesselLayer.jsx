@@ -111,18 +111,24 @@ export function VesselLayer({ map, vessels, onVesselClick, onVesselHover }) {
 
   // Update vessel layer on MapLibre
   useEffect(() => {
-    if (!map || !map.isStyleLoaded()) return;
+    if (!map || !map.isStyleLoaded || typeof map.isStyleLoaded !== 'function' || !map.isStyleLoaded()) return;
+    if (typeof map.getLayer !== 'function' || typeof map.addSource !== 'function') return;
 
     const sourceId = 'vessels';
     const layerId = 'vessels-layer';
     const clusterLayerId = 'vessels-clusters';
     const clusterCountLayerId = 'vessels-cluster-count';
 
-    // Remove existing layers and sources
-    if (map.getLayer(layerId)) map.removeLayer(layerId);
-    if (map.getLayer(clusterLayerId)) map.removeLayer(clusterLayerId);
-    if (map.getLayer(clusterCountLayerId)) map.removeLayer(clusterCountLayerId);
-    if (map.getSource(sourceId)) map.removeSource(sourceId);
+    // Remove existing layers and sources (with safety checks)
+    try {
+      if (map.getLayer && map.getLayer(layerId)) map.removeLayer(layerId);
+      if (map.getLayer && map.getLayer(clusterLayerId)) map.removeLayer(clusterLayerId);
+      if (map.getLayer && map.getLayer(clusterCountLayerId)) map.removeLayer(clusterCountLayerId);
+      if (map.getSource && map.getSource(sourceId)) map.removeSource(sourceId);
+    } catch (error) {
+      console.warn('[VesselLayer] Error removing existing layers:', error);
+      // Continue anyway - layers might not exist yet
+    }
 
     // Add vessel source
     map.addSource(sourceId, {
@@ -274,10 +280,20 @@ export function VesselLayer({ map, vessels, onVesselClick, onVesselHover }) {
 
     // Cleanup
     return () => {
-      if (map.getLayer(layerId)) map.removeLayer(layerId);
-      if (map.getLayer(clusterLayerId)) map.removeLayer(clusterLayerId);
-      if (map.getLayer(clusterCountLayerId)) map.removeLayer(clusterCountLayerId);
-      if (map.getSource(sourceId)) map.removeSource(sourceId);
+      // CRITICAL: Check if map exists and is still valid before cleanup
+      if (!map || !map.isStyleLoaded || typeof map.getLayer !== 'function') {
+        return;
+      }
+      
+      try {
+        if (map.getLayer(layerId)) map.removeLayer(layerId);
+        if (map.getLayer(clusterLayerId)) map.removeLayer(clusterLayerId);
+        if (map.getLayer(clusterCountLayerId)) map.removeLayer(clusterCountLayerId);
+        if (map.getSource && map.getSource(sourceId)) map.removeSource(sourceId);
+      } catch (error) {
+        // Map might be destroyed, ignore cleanup errors
+        console.warn('[VesselLayer] Cleanup error (map may be destroyed):', error);
+      }
     };
   }, [map, vesselGeoJSON, onVesselClick, onVesselHover]);
 

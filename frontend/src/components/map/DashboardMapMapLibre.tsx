@@ -145,9 +145,13 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick }) {
     }
 
     function renderGeofences() {
-      // Remove existing geofences
-      if (map.getLayer(layerId)) map.removeLayer(layerId);
-      if (map.getSource(sourceId)) map.removeSource(sourceId);
+      // Remove existing geofences (with safety checks)
+      try {
+        if (map && typeof map.getLayer === 'function' && map.getLayer(layerId)) map.removeLayer(layerId);
+        if (map && typeof map.getSource === 'function' && map.getSource(sourceId)) map.removeSource(sourceId);
+      } catch (error) {
+        console.warn('[DashboardMapMapLibre] Error removing geofences:', error);
+      }
 
       if (!geofences || geofences.length === 0) return;
 
@@ -242,9 +246,19 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick }) {
     renderGeofences();
 
     return () => {
-      if (map.getLayer(layerId)) map.removeLayer(layerId);
-      if (map.getLayer(`${layerId}-outline`)) map.removeLayer(`${layerId}-outline`);
-      if (map.getSource(sourceId)) map.removeSource(sourceId);
+      // CRITICAL: Check if map exists and is still valid before cleanup
+      if (!map || !map.isStyleLoaded || typeof map.getLayer !== 'function') {
+        return;
+      }
+      
+      try {
+        if (map.getLayer(layerId)) map.removeLayer(layerId);
+        if (map.getLayer(`${layerId}-outline`)) map.removeLayer(`${layerId}-outline`);
+        if (map.getSource && map.getSource(sourceId)) map.removeSource(sourceId);
+      } catch (error) {
+        // Map might be destroyed, ignore cleanup errors
+        console.warn('[DashboardMapMapLibre] Geofences cleanup error (map may be destroyed):', error);
+      }
     };
   }, [mapRef.current, geofences]);
 
@@ -268,9 +282,13 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick }) {
     }
 
     function renderOpsSites() {
-      // Remove existing ops sites
-      if (map.getLayer(layerId)) map.removeLayer(layerId);
-      if (map.getSource(sourceId)) map.removeSource(sourceId);
+      // Remove existing ops sites (with safety checks)
+      try {
+        if (map && typeof map.getLayer === 'function' && map.getLayer(layerId)) map.removeLayer(layerId);
+        if (map && typeof map.getSource === 'function' && map.getSource(sourceId)) map.removeSource(sourceId);
+      } catch (error) {
+        console.warn('[DashboardMapMapLibre] Error removing ops sites:', error);
+      }
 
       if (!opsSites || opsSites.length === 0) return;
 
@@ -321,8 +339,18 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick }) {
     renderOpsSites();
 
     return () => {
-      if (map.getLayer(layerId)) map.removeLayer(layerId);
-      if (map.getSource(sourceId)) map.removeSource(sourceId);
+      // CRITICAL: Check if map exists and is still valid before cleanup
+      if (!map || !map.isStyleLoaded || typeof map.getLayer !== 'function') {
+        return;
+      }
+      
+      try {
+        if (map.getLayer(layerId)) map.removeLayer(layerId);
+        if (map.getSource && map.getSource(sourceId)) map.removeSource(sourceId);
+      } catch (error) {
+        // Map might be destroyed, ignore cleanup errors
+        console.warn('[DashboardMapMapLibre] Cleanup error (map may be destroyed):', error);
+      }
     };
   }, [mapRef.current, opsSites]);
 
