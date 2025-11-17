@@ -133,17 +133,23 @@ export function MapEngine({
     if (!mapRef.current || !mapRef.current.isStyleLoaded()) return;
 
     const map = mapRef.current;
+    if (!map || typeof map.getLayer !== 'function' || typeof map.getSource !== 'function') return;
+    
     const styleConfig = MAP_STYLES[layerId] || MAP_STYLES.standard;
 
-    // Remove existing overlay layers
-    overlayLayersRef.current.forEach((overlayLayerId) => {
-      if (map.getLayer(overlayLayerId)) {
-        map.removeLayer(overlayLayerId);
-      }
-      if (map.getSource(overlayLayerId)) {
-        map.removeSource(overlayLayerId);
-      }
-    });
+    // Remove existing overlay layers (with safety checks)
+    try {
+      overlayLayersRef.current.forEach((overlayLayerId) => {
+        if (map.getLayer && map.getLayer(overlayLayerId)) {
+          map.removeLayer(overlayLayerId);
+        }
+        if (map.getSource && map.getSource(overlayLayerId)) {
+          map.removeSource(overlayLayerId);
+        }
+      });
+    } catch (error) {
+      console.warn('[MapEngine] Error removing overlay layers:', error);
+    }
     overlayLayersRef.current = [];
 
     // For raster layers (satellite), add as raster source
