@@ -24,6 +24,12 @@
   z-index: 1;
 }
 
+/* Ensure map controls render above overlay content */
+.mapBackground :global(.coordinateReadout),
+.mapBackground :global(.mapControlButtons) {
+  z-index: 2000 !important;
+}
+
 /* Main content area - 3 column layout: [SIDEBAR] | [MAP+KPIs] | [RIGHT PANEL] */
 .overlayContent {
   position: relative;
@@ -126,7 +132,7 @@
 
 /* Right Panel: Stats + Events - Fixed width, scrollable */
 .rightPanel {
-  width: 320px; /* Reduced from 360px to leave space for map controls */
+  width: 300px; /* Reduced to leave space for map controls */
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -139,9 +145,11 @@
   /* Custom scrollbar */
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
-  /* Leave space on right for map controls (buttons ~150px + coordinate readout ~180px) */
-  margin-right: 0;
   box-sizing: border-box;
+  /* Add right margin to leave space for map controls (coordinate readout ~180px + buttons ~150px) */
+  margin-right: 0;
+  /* Clip content to prevent overflow into map control area */
+  clip-path: inset(0 0 0 0);
 }
 
 .rightPanel::-webkit-scrollbar {
@@ -189,7 +197,8 @@
 /* Responsive Design */
 @media (max-width: 1400px) {
   .rightPanel {
-    width: 300px;
+    width: 280px;
+    max-width: calc(100% - 220px);
   }
 }
 
