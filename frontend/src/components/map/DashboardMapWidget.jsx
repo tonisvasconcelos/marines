@@ -28,6 +28,7 @@ function DashboardMapWidget({ vessels, onVesselClick, onExpand }) {
           opsSites={null}
           onVesselClick={onVesselClick}
           showControls={true}
+          isDashboardWidget={true}
         />
       </div>
     </div>

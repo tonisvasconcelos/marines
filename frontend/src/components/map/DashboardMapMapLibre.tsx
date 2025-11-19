@@ -19,7 +19,7 @@ import { getVesselsInZone } from '../../api/myshiptracking';
 import { useQuery } from '@tanstack/react-query';
 import styles from './DashboardMap.module.css';
 
-function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, showControls = true }) {
+function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, showControls = true, isDashboardWidget = false }) {
   const navigate = useNavigate();
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
@@ -378,8 +378,8 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, sho
         />
       )}
       
-      {/* Vessel Search - Only show if controls are enabled */}
-      {showControls && (
+      {/* Vessel Search - Hidden on dashboard (only show in fullscreen mode) */}
+      {false && showControls && (
         <div className={styles.vesselSearchContainer}>
           <VesselSearch
             onSelectVessel={(vessel) => {
@@ -394,8 +394,8 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, sho
         </div>
       )}
       
-      {/* Additional Map Controls - Only show if controls are enabled */}
-      {showControls && mapRef.current && (
+      {/* Additional Map Controls - Hidden on dashboard (only show in fullscreen mode) */}
+      {false && showControls && mapRef.current && (
         <>
           <CoordinateReadout map={mapRef.current} />
           <ScaleBar map={mapRef.current} />
