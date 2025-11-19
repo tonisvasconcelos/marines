@@ -27,7 +27,7 @@ function DashboardMapWidget({ vessels, onVesselClick, onExpand }) {
           geofences={null}
           opsSites={null}
           onVesselClick={onVesselClick}
-          showControls={false}
+          showControls={true}
         />
       </div>
     </div>

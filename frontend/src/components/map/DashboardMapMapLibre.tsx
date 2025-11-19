@@ -13,6 +13,7 @@ import { CoordinateReadout, MapControlButtons, ScaleBar } from './MapLibreContro
 import { MeasurementTool } from './MeasurementTool';
 import { MiniPopup } from './MiniPopup';
 import { VesselSearch } from './VesselSearch';
+import MapViewSettings from './MapViewSettings';
 import { normalizeVesselPosition } from '../../utils/coordinateUtils';
 import { getVesselsInZone } from '../../api/myshiptracking';
 import { useQuery } from '@tanstack/react-query';
@@ -393,10 +394,9 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, sho
         </div>
       )}
       
-      {/* Map Controls - Only show if controls are enabled */}
+      {/* Additional Map Controls - Only show if controls are enabled */}
       {showControls && mapRef.current && (
         <>
-          <MapControlButtons map={mapRef.current} vessels={vessels} />
           <CoordinateReadout map={mapRef.current} />
           <ScaleBar map={mapRef.current} />
         </>
@@ -433,25 +433,15 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, sho
         </div>
       )}
 
-      {/* Map Mode Selector - Only show if controls are enabled */}
-      {showControls && (
-        <div className={styles.mapModeSelector}>
-          <div className={styles.mapModeHeader}>MAPA</div>
-          <div className={styles.mapModeButtons}>
-            <button
-              className={`${styles.mapModeButton} ${baseLayer === 'standard' ? styles.active : ''}`}
-              onClick={() => handleBaseLayerChange('standard')}
-            >
-              Padrão
-            </button>
-            <button
-              className={`${styles.mapModeButton} ${baseLayer === 'nautical' ? styles.active : ''}`}
-              onClick={() => handleBaseLayerChange('nautical')}
-            >
-              Carta Náutica
-            </button>
-          </div>
-        </div>
+      {/* Unified MapViewSettings Widget - Only show if controls are enabled */}
+      {showControls && mapRef.current && (
+        <MapViewSettings
+          map={mapRef.current}
+          vessels={vessels}
+          baseLayer={baseLayer}
+          onBaseLayerChange={handleBaseLayerChange}
+          onZoomToFleet={() => {}}
+        />
       )}
     </div>
   );
