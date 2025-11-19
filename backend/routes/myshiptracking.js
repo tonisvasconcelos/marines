@@ -150,16 +150,27 @@ router.get('/vessel/zone', async (req, res) => {
     }
     
     const { apiKey, secretKey } = getApiConfig(req);
+    const zoneParams = {
+      minlon: parseFloat(minlon),
+      maxlon: parseFloat(maxlon),
+      minlat: parseFloat(minlat),
+      maxlat: parseFloat(maxlat),
+    };
+    
+    // Build options object with optional parameters
+    const options = {};
+    if (minutesBack) {
+      options.minutesBack = parseInt(minutesBack);
+    }
+    if (response) {
+      options.response = response;
+    }
+    
     const results = await myshiptracking.getVesselsInZone(
-      {
-        minlon: parseFloat(minlon),
-        maxlon: parseFloat(maxlon),
-        minlat: parseFloat(minlat),
-        maxlat: parseFloat(maxlat),
-      },
-      minutesBack ? parseInt(minutesBack) : undefined,
+      zoneParams,
       apiKey,
-      secretKey
+      secretKey,
+      options
     );
     
     res.json(results);
