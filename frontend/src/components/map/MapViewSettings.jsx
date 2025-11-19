@@ -12,8 +12,6 @@ function MapViewSettings({
   onBaseLayerChange, 
   onZoomToFleet 
 }) {
-  const [isFullscreen, setIsFullscreen] = useState(false);
-
   const handleZoomToFleet = () => {
     if (!map || !vessels || vessels.length === 0) return;
     
@@ -55,16 +53,6 @@ function MapViewSettings({
       center: [-43.1729, -22.9068], // [lon, lat]
       zoom: 8,
     });
-  };
-
-  const handleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen();
-      setIsFullscreen(true);
-    } else {
-      document.exitFullscreen();
-      setIsFullscreen(false);
-    }
   };
 
   return (
