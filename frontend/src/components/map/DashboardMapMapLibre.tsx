@@ -100,18 +100,23 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, sho
     }
   }, [vessels]);
 
-  // Handle base layer change
+  // Handle layers change (multi-selection)
   const handleLayersChange = useCallback((newSelectedLayers) => {
     setSelectedLayers(newSelectedLayers);
-    // For backward compatibility, use first selected layer as primary base layer
-    const primaryLayer = newSelectedLayers.length > 0 ? newSelectedLayers[0] : 'standard';
-    if (onBaseLayerChange) {
-      onBaseLayerChange(primaryLayer);
-    }
-  }, [onBaseLayerChange]);
+  }, []);
 
-  // Legacy handler for single layer change (for backward compatibility)
+  // Legacy handler for single layer change (for backward compatibility with MapEngine)
   const handleBaseLayerChange = useCallback((layerId) => {
+    // Update selected layers to include this layer
+    setSelectedLayers(prev => {
+      if (prev.includes(layerId)) return prev;
+      // If switching base layers (standard/dark), replace them
+      if (layerId === 'standard' || layerId === 'dark') {
+        return [layerId, ...prev.filter(l => l !== 'standard' && l !== 'dark')];
+      }
+      // Otherwise add to selection
+      return [...prev, layerId];
+    });
     setBaseLayer(layerId);
   }, []);
 
