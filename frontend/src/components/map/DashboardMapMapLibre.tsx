@@ -24,7 +24,7 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, sho
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
   const [selectedVessel, setSelectedVessel] = useState(null);
-  const [baseLayer, setBaseLayer] = useState('standard');
+  const [selectedLayers, setSelectedLayers] = useState(['standard']); // Multi-selection support
   const [overlays, setOverlays] = useState({});
   const [measurementEnabled, setMeasurementEnabled] = useState(false);
   const [mapBounds, setMapBounds] = useState(null);
@@ -101,6 +101,16 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, sho
   }, [vessels]);
 
   // Handle base layer change
+  const handleLayersChange = useCallback((newSelectedLayers) => {
+    setSelectedLayers(newSelectedLayers);
+    // For backward compatibility, use first selected layer as primary base layer
+    const primaryLayer = newSelectedLayers.length > 0 ? newSelectedLayers[0] : 'standard';
+    if (onBaseLayerChange) {
+      onBaseLayerChange(primaryLayer);
+    }
+  }, [onBaseLayerChange]);
+
+  // Legacy handler for single layer change (for backward compatibility)
   const handleBaseLayerChange = useCallback((layerId) => {
     setBaseLayer(layerId);
   }, []);
@@ -365,7 +375,8 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, sho
         onMapReady={handleMapReady}
         initialCenter={[-43.1729, -22.9068]} // [lon, lat]
         initialZoom={8}
-        baseLayer={baseLayer}
+        baseLayer={selectedLayers.length > 0 ? selectedLayers[0] : 'standard'}
+        selectedLayers={selectedLayers}
         onBaseLayerChange={handleBaseLayerChange}
         hideBuiltInControls={isDashboardWidget}
       />
@@ -438,10 +449,8 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, sho
       {showControls && mapRef.current && (
         <MapViewSettings
           map={mapRef.current}
-          vessels={vessels}
-          baseLayer={baseLayer}
-          onBaseLayerChange={handleBaseLayerChange}
-          onZoomToFleet={() => {}}
+          selectedLayers={selectedLayers}
+          onLayersChange={handleLayersChange}
         />
       )}
     </div>

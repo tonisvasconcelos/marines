@@ -24,8 +24,10 @@ export const MAP_STYLES = {
   dark: {
     id: 'dark',
     name: 'Dark',
-    url: 'https://demotiles.maplibre.org/style.json', // Will use dark variant
-    // For production, use a proper dark style URL
+    // Use CartoDB Dark Matter for dark mode (raster tiles)
+    rasterUrl: 'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    // Alternative: Stadia Maps dark tiles
+    // rasterUrl: 'https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png'
   },
   satellite: {
     id: 'satellite',
@@ -52,6 +54,7 @@ export function MapEngine({
   initialCenter = [-43.1729, -22.9068], // [lon, lat] for MapLibre
   initialZoom = 8,
   baseLayer = 'standard',
+  selectedLayers = ['standard'], // Multi-selection support
   onBaseLayerChange,
   hideBuiltInControls = false, // Hide built-in zoom/fullscreen controls
 }) {
@@ -245,7 +248,81 @@ export function MapEngine({
     baseLayerRef.current = layerId;
   }, []);
 
-  // Update base layer when prop changes
+  // Load multiple layers based on selection
+  const loadMultipleLayers = useCallback((layers) => {
+    if (!mapRef.current || !mapRef.current.isStyleLoaded()) return;
+    
+    const map = mapRef.current;
+    if (!map || typeof map.getLayer !== 'function' || typeof map.getSource !== 'function') return;
+
+    // Determine base layer (standard or dark - can't have both)
+    const hasStandard = layers.includes('standard');
+    const hasDark = layers.includes('dark');
+    const hasNautical = layers.includes('nautical');
+    
+    // Use dark if selected, otherwise use standard (or default to standard)
+    const primaryBaseLayer = hasDark ? 'dark' : (hasStandard ? 'standard' : 'standard');
+    
+    // Load base layer
+    loadBaseLayer(primaryBaseLayer);
+    
+    // Add/remove nautical overlay based on selection
+    const nauticalOverlayId = 'nautical-overlay-layer';
+    const nauticalSourceId = 'nautical-overlay';
+    
+    if (hasNautical) {
+      // Add nautical overlay if not already present
+      if (!map.getLayer(nauticalOverlayId)) {
+        const nauticalConfig = MAP_STYLES.nautical;
+        if (nauticalConfig.overlayUrl) {
+          try {
+            map.addSource(nauticalSourceId, {
+              type: 'raster',
+              tiles: [nauticalConfig.overlayUrl],
+              tileSize: 256,
+            });
+            
+            map.addLayer({
+              id: nauticalOverlayId,
+              type: 'raster',
+              source: nauticalSourceId,
+              paint: {
+                'raster-opacity': 0.8,
+              },
+            });
+            
+            if (!overlayLayersRef.current.includes(nauticalOverlayId)) {
+              overlayLayersRef.current.push(nauticalOverlayId);
+            }
+          } catch (error) {
+            console.warn('[MapEngine] Error adding nautical overlay:', error);
+          }
+        }
+      }
+    } else {
+      // Remove nautical overlay if present
+      try {
+        if (map.getLayer(nauticalOverlayId)) {
+          map.removeLayer(nauticalOverlayId);
+        }
+        if (map.getSource(nauticalSourceId)) {
+          map.removeSource(nauticalSourceId);
+        }
+        overlayLayersRef.current = overlayLayersRef.current.filter(id => id !== nauticalOverlayId);
+      } catch (error) {
+        console.warn('[MapEngine] Error removing nautical overlay:', error);
+      }
+    }
+  }, [loadBaseLayer]);
+
+  // Update layers when selection changes
+  useEffect(() => {
+    if (mapRef.current && selectedLayers) {
+      loadMultipleLayers(selectedLayers);
+    }
+  }, [selectedLayers, loadMultipleLayers]);
+
+  // Update base layer when prop changes (for backward compatibility)
   useEffect(() => {
     if (mapRef.current && baseLayer !== baseLayerRef.current) {
       loadBaseLayer(baseLayer);

@@ -1,61 +1,34 @@
 import { useState } from 'react';
-import { FiCrosshair, FiZoomIn, FiChevronDown, FiChevronUp } from 'react-icons/fi';
+import { FiChevronDown, FiChevronUp } from 'react-icons/fi';
 import styles from './MapViewSettings.module.css';
 
 /**
  * Unified MapViewSettings Widget
- * Combines map mode selector and map control buttons in a single widget
+ * Map mode selector with multi-selection support
  * Can be minimized to save space on the map
  */
 function MapViewSettings({ 
   map, 
-  vessels, 
-  baseLayer, 
-  onBaseLayerChange, 
-  onZoomToFleet 
+  selectedLayers = [], 
+  onLayersChange
 }) {
   const [isMinimized, setIsMinimized] = useState(false);
-  const handleZoomToFleet = () => {
-    if (!map || !vessels || vessels.length === 0) return;
-    
-    const bounds = [];
-    vessels.forEach((vessel) => {
-      if (vessel.position) {
-        const rawLat = vessel.position.lat ?? vessel.position.latitude ?? null;
-        const rawLon = vessel.position.lon ?? vessel.position.longitude ?? null;
-        
-        if (rawLat && rawLon) {
-          const lat = typeof rawLat === 'string' ? parseFloat(rawLat) : Number(rawLat);
-          const lon = typeof rawLon === 'string' ? parseFloat(rawLon) : Number(rawLon);
-          
-          if (isFinite(lat) && isFinite(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
-            bounds.push([lon, lat]); // MapLibre uses [lon, lat]
-          }
-        }
-      }
-    });
-    
-    if (bounds.length > 0) {
-      // Calculate bounding box
-      const lons = bounds.map(b => b[0]);
-      const lats = bounds.map(b => b[1]);
-      const bbox = [
-        [Math.min(...lons), Math.min(...lats)],
-        [Math.max(...lons), Math.max(...lats)],
-      ];
-      
-      map.fitBounds(bbox, { padding: 50 });
-      if (onZoomToFleet) onZoomToFleet();
-    }
-  };
 
-  const handleAutoCenter = () => {
-    if (!map) return;
-    // Center on default operational area (Rio de Janeiro)
-    map.easeTo({
-      center: [-43.1729, -22.9068], // [lon, lat]
-      zoom: 8,
-    });
+  // Available map layer options
+  const mapLayers = [
+    { id: 'standard', label: 'Padrão' },
+    { id: 'dark', label: 'Dark' },
+    { id: 'nautical', label: 'Carta Náutica' },
+  ];
+
+  const handleLayerToggle = (layerId) => {
+    if (!onLayersChange) return;
+    
+    const newSelectedLayers = selectedLayers.includes(layerId)
+      ? selectedLayers.filter(id => id !== layerId)
+      : [...selectedLayers, layerId];
+    
+    onLayersChange(newSelectedLayers);
   };
 
   return (
@@ -76,46 +49,22 @@ function MapViewSettings({
       {/* Content - Hidden when minimized */}
       {!isMinimized && (
         <div className={styles.widgetContent}>
-          {/* Map Mode Selector Section */}
+          {/* Map Mode Selector Section - Multi-selection */}
           <div className={styles.settingsSection}>
-            <div className={styles.sectionHeader}>MAPA</div>
             <div className={styles.mapModeButtons}>
-              <button
-                className={`${styles.mapModeButton} ${baseLayer === 'standard' ? styles.active : ''}`}
-                onClick={() => onBaseLayerChange('standard')}
-              >
-                Padrão
-              </button>
-              <button
-                className={`${styles.mapModeButton} ${baseLayer === 'nautical' ? styles.active : ''}`}
-                onClick={() => onBaseLayerChange('nautical')}
-              >
-                Carta Náutica
-              </button>
-            </div>
-          </div>
-
-          {/* Map Controls Section */}
-          <div className={styles.settingsSection}>
-            <div className={styles.sectionHeader}>CONTROLES</div>
-            <div className={styles.controlButtons}>
-              <button
-                className={styles.controlButton}
-                onClick={handleZoomToFleet}
-                title="Zoom to Fleet"
-              >
-                <FiZoomIn size={16} />
-                <span>Zoom to Fleet</span>
-              </button>
-              
-              <button
-                className={styles.controlButton}
-                onClick={handleAutoCenter}
-                title="Auto Center"
-              >
-                <FiCrosshair size={16} />
-                <span>Center</span>
-              </button>
+              {mapLayers.map((layer) => {
+                const isSelected = selectedLayers.includes(layer.id);
+                return (
+                  <button
+                    key={layer.id}
+                    className={`${styles.mapModeButton} ${isSelected ? styles.active : ''}`}
+                    onClick={() => handleLayerToggle(layer.id)}
+                    title={layer.label}
+                  >
+                    {layer.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
