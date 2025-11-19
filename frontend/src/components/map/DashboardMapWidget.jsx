@@ -1,4 +1,5 @@
 import DashboardMapMapLibre from './DashboardMapMapLibre';
+import MapExpandButton from './MapExpandButton';
 import styles from './DashboardMapWidget.module.css';
 
 /**
@@ -20,6 +21,8 @@ function DashboardMapWidget({ vessels, onVesselClick, onExpand }) {
           showControls={true}
           isDashboardWidget={true}
         />
+        {/* Expand to Fullscreen Button Widget */}
+        <MapExpandButton onExpand={onExpand} />
       </div>
     </div>
   );
