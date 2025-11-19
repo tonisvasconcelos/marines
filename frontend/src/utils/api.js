@@ -42,6 +42,22 @@ export function createApiClient() {
         throw new Error('Unauthorized');
       }
 
+      if (response.status === 403) {
+        // Forbidden - token might be expired or invalid
+        // Try to get more details from error response
+        const error = await response.json().catch(() => ({ message: 'Invalid or expired token' }));
+        // Don't redirect on 403 for preview endpoints - let the component handle it
+        if (endpoint.includes('/preview-position')) {
+          throw new Error(error.message || 'Invalid or expired token');
+        }
+        // For other endpoints, treat 403 like 401
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('auth_user');
+        localStorage.removeItem('auth_tenant');
+        window.location.href = '/login';
+        throw new Error(error.message || 'Forbidden');
+      }
+
       if (!response.ok) {
         const error = await response.json().catch(() => ({ message: 'Request failed' }));
         throw new Error(error.message || `HTTP ${response.status}`);

@@ -22,24 +22,31 @@ function VesselForm({ onClose, vessel = null }) {
   const shouldFetchPosition = hasValidImo || hasValidMmsi;
   
   // Fetch AIS position preview when IMO or MMSI is provided
+  // This is optional - vessel can be created even if position fetch fails
   const { data: position, isLoading: positionLoading, error: positionError } = useQuery({
     queryKey: ['vessel-position-preview', imoNumber || formData.mmsi],
     queryFn: async () => {
-      const params = new URLSearchParams();
-      if (imoNumber) params.append('imo', imoNumber);
-      if (formData.mmsi) params.append('mmsi', formData.mmsi);
-      
-      const data = await api.get(`/vessels/preview-position?${params.toString()}`);
-      // Normalize position data to handle case variations
-      return {
-        ...data,
-        lat: data.lat || data.Lat || data.latitude || data.Latitude,
-        lon: data.lon || data.Lon || data.longitude || data.Longitude,
-      };
+      try {
+        const params = new URLSearchParams();
+        if (imoNumber) params.append('imo', imoNumber);
+        if (formData.mmsi) params.append('mmsi', formData.mmsi);
+        
+        const data = await api.get(`/vessels/preview-position?${params.toString()}`);
+        // Normalize position data to handle case variations
+        return {
+          ...data,
+          lat: data.lat || data.Lat || data.latitude || data.Latitude,
+          lon: data.lon || data.Lon || data.longitude || data.Longitude,
+        };
+      } catch (error) {
+        // Don't throw - just return null so vessel creation can proceed
+        console.warn('Position preview failed (non-blocking):', error.message);
+        return null;
+      }
     },
     enabled: shouldFetchPosition, // Always a boolean
-    retry: 1,
-    retryDelay: 1000,
+    retry: false, // Don't retry on auth errors
+    staleTime: 30000, // Cache for 30 seconds
   });
 
   const createMutation = useMutation({
@@ -134,8 +141,12 @@ function VesselForm({ onClose, vessel = null }) {
               {positionLoading ? (
                 <div className={styles.loading}>Loading position...</div>
               ) : positionError ? (
-                <div className={styles.error}>
-                  Unable to fetch position. {positionError.message || 'Please check IMO/MMSI and AIS configuration.'}
+                <div className={styles.warning}>
+                  <small>
+                    Position preview unavailable. {positionError.message?.includes('token') 
+                      ? 'Authentication issue - position will be fetched after vessel creation.'
+                      : 'Please check IMO/MMSI and AIS configuration. You can still create the vessel.'}
+                  </small>
                 </div>
               ) : position && position.lat && position.lon ? (
                 <div className={styles.mapPreview}>
@@ -151,7 +162,7 @@ function VesselForm({ onClose, vessel = null }) {
                     </small>
                   </div>
                 </div>
-              ) : hasIdentifier ? (
+              ) : (hasValidImo || hasValidMmsi) ? (
                 <div className={styles.info}>
                   <small>Enter a valid IMO (7 digits) or MMSI (9 digits) to see vessel position on map.</small>
                 </div>
