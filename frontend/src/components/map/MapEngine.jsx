@@ -333,6 +333,23 @@ export function MapEngine({
     }
   }, [selectedLayers, loadMultipleLayers]);
 
+  // Handle window resize to ensure map resizes properly (especially in modals)
+  useEffect(() => {
+    const handleResize = () => {
+      if (mapRef.current) {
+        // Small delay to ensure container has updated dimensions
+        setTimeout(() => {
+          if (mapRef.current) {
+            mapRef.current.resize();
+          }
+        }, 50);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // Update base layer when prop changes (for backward compatibility)
   useEffect(() => {
     if (mapRef.current && baseLayer !== baseLayerRef.current) {

@@ -47,6 +47,13 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, sho
     mapRef.current = map;
     console.log('[DashboardMapMapLibre] MapLibre map ready');
 
+    // Resize map to ensure proper rendering (especially in modals)
+    setTimeout(() => {
+      if (map && typeof map.resize === 'function') {
+        map.resize();
+      }
+    }, 100);
+
     // Track user interactions
     map.on('zoomstart', () => {
       hasUserInteractedRef.current = true;
@@ -421,7 +428,7 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, sho
       {/* Overlay Controls - Hidden in dashboard widget, only show in fullscreen mode */}
       {showControls && !isDashboardWidget && (
         <OverlayControls
-          baseLayer={baseLayer}
+          baseLayer={selectedLayers.length > 0 ? selectedLayers[0] : 'standard'}
           onBaseLayerChange={handleBaseLayerChange}
           overlays={overlays}
           onOverlayToggle={handleOverlayToggle}
