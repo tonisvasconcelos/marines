@@ -1,9 +1,11 @@
-import { FiCrosshair, FiZoomIn } from 'react-icons/fi';
+import { useState } from 'react';
+import { FiCrosshair, FiZoomIn, FiChevronDown, FiChevronUp } from 'react-icons/fi';
 import styles from './MapViewSettings.module.css';
 
 /**
  * Unified MapViewSettings Widget
  * Combines map mode selector and map control buttons in a single widget
+ * Can be minimized to save space on the map
  */
 function MapViewSettings({ 
   map, 
@@ -12,6 +14,7 @@ function MapViewSettings({
   onBaseLayerChange, 
   onZoomToFleet 
 }) {
+  const [isMinimized, setIsMinimized] = useState(false);
   const handleZoomToFleet = () => {
     if (!map || !vessels || vessels.length === 0) return;
     
@@ -57,48 +60,66 @@ function MapViewSettings({
 
   return (
     <div className={styles.mapViewSettings}>
-      {/* Map Mode Selector Section */}
-      <div className={styles.settingsSection}>
-        <div className={styles.sectionHeader}>MAPA</div>
-        <div className={styles.mapModeButtons}>
-          <button
-            className={`${styles.mapModeButton} ${baseLayer === 'standard' ? styles.active : ''}`}
-            onClick={() => onBaseLayerChange('standard')}
-          >
-            Padrão
-          </button>
-          <button
-            className={`${styles.mapModeButton} ${baseLayer === 'nautical' ? styles.active : ''}`}
-            onClick={() => onBaseLayerChange('nautical')}
-          >
-            Carta Náutica
-          </button>
-        </div>
+      {/* Widget Header with Minimize Button */}
+      <div className={styles.widgetHeader}>
+        <div className={styles.widgetTitle}>MAPA</div>
+        <button
+          className={styles.minimizeButton}
+          onClick={() => setIsMinimized(!isMinimized)}
+          title={isMinimized ? "Expand widget" : "Minimize widget"}
+          aria-label={isMinimized ? "Expand widget" : "Minimize widget"}
+        >
+          {isMinimized ? <FiChevronUp size={14} /> : <FiChevronDown size={14} />}
+        </button>
       </div>
 
-      {/* Map Controls Section */}
-      <div className={styles.settingsSection}>
-        <div className={styles.sectionHeader}>CONTROLES</div>
-        <div className={styles.controlButtons}>
-          <button
-            className={styles.controlButton}
-            onClick={handleZoomToFleet}
-            title="Zoom to Fleet"
-          >
-            <FiZoomIn size={16} />
-            <span>Zoom to Fleet</span>
-          </button>
-          
-          <button
-            className={styles.controlButton}
-            onClick={handleAutoCenter}
-            title="Auto Center"
-          >
-            <FiCrosshair size={16} />
-            <span>Center</span>
-          </button>
+      {/* Content - Hidden when minimized */}
+      {!isMinimized && (
+        <div className={styles.widgetContent}>
+          {/* Map Mode Selector Section */}
+          <div className={styles.settingsSection}>
+            <div className={styles.sectionHeader}>MAPA</div>
+            <div className={styles.mapModeButtons}>
+              <button
+                className={`${styles.mapModeButton} ${baseLayer === 'standard' ? styles.active : ''}`}
+                onClick={() => onBaseLayerChange('standard')}
+              >
+                Padrão
+              </button>
+              <button
+                className={`${styles.mapModeButton} ${baseLayer === 'nautical' ? styles.active : ''}`}
+                onClick={() => onBaseLayerChange('nautical')}
+              >
+                Carta Náutica
+              </button>
+            </div>
+          </div>
+
+          {/* Map Controls Section */}
+          <div className={styles.settingsSection}>
+            <div className={styles.sectionHeader}>CONTROLES</div>
+            <div className={styles.controlButtons}>
+              <button
+                className={styles.controlButton}
+                onClick={handleZoomToFleet}
+                title="Zoom to Fleet"
+              >
+                <FiZoomIn size={16} />
+                <span>Zoom to Fleet</span>
+              </button>
+              
+              <button
+                className={styles.controlButton}
+                onClick={handleAutoCenter}
+                title="Auto Center"
+              >
+                <FiCrosshair size={16} />
+                <span>Center</span>
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
