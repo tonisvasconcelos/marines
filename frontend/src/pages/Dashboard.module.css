@@ -1,6 +1,5 @@
 .dashboard {
   width: 100%;
-  /* Full height to fill viewport - account for topbar */
   height: calc(100vh - 64px);
   min-height: calc(100vh - 64px);
   padding: 0;
@@ -12,63 +11,29 @@
   background-color: var(--bg-primary);
 }
 
-/* Full-screen map background */
-.mapBackground {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+/* Main Dashboard Content */
+.dashboardContent {
   width: 100%;
   height: 100%;
-  z-index: 1;
-}
-
-/* Ensure map controls render above overlay content */
-.mapBackground :global(.coordinateReadout),
-.mapBackground :global(.mapControlButtons) {
-  z-index: 2000 !important;
-}
-
-/* Main content area - 3 column layout: [SIDEBAR] | [MAP+KPIs] | [RIGHT PANEL] */
-.overlayContent {
-  position: relative;
-  z-index: 10;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: row;
-  gap: 0;
-  pointer-events: none; /* Allow clicks to pass through to map */
-}
-
-/* Ensure map controls are above right panel */
-.mapBackground :global(.mapControlButtons),
-.mapBackground :global(.coordinateReadout) {
-  z-index: 1001 !important;
-}
-
-/* Left section: Header + KPIs + Map */
-.mainContent {
-  flex: 1;
   display: flex;
   flex-direction: column;
-  min-width: 0;
-  padding: 4px; /* Minimal padding to maximize map area */
-  gap: 4px; /* Minimal gap for more compact layout */
-  pointer-events: none; /* Allow clicks to pass through to map */
+  padding: 16px;
+  gap: 16px;
+  overflow-y: auto;
 }
 
-/* Re-enable pointer events for interactive elements */
-.mainContent > *:not(.mapContainer) {
-  pointer-events: auto;
-}
-
-/* Tactical Header - Compact */
+/* Tactical Header */
 .header {
-  display: none; /* Hide header to maximize map area */
-  flex: 0 0 0;
-  visibility: hidden;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background-color: rgba(15, 23, 42, 0.9);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  flex-shrink: 0;
 }
 
 .title {
@@ -125,16 +90,14 @@
 
 /* Right Panel: Stats + Events - Fixed width, scrollable */
 .rightPanel {
-  width: 260px; /* Further reduced to maximize map area */
-  flex-shrink: 0;
+  width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 6px; /* Minimal gap */
-  padding: 6px; /* Minimal padding */
+  gap: 12px;
+  padding: 0;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  pointer-events: auto; /* Ensure right panel is interactive */
   /* Custom scrollbar */
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
@@ -158,17 +121,21 @@
   background-color: var(--border-light);
 }
 
-/* Map container - fills remaining space */
-.mapContainer {
+/* Content Grid: Map Widget + Right Panel */
+.contentGrid {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 16px;
   flex: 1;
+  min-height: 0;
+}
+
+/* Map Widget Container */
+.mapWidgetContainer {
   min-height: 0;
   display: flex;
   flex-direction: column;
   position: relative;
-  /* Ensure map container doesn't cause overflow */
-  overflow: hidden;
-  /* Allow pointer events to pass through to map in background */
-  pointer-events: none;
 }
 
 .statsSection {
@@ -185,39 +152,28 @@
 
 /* Responsive Design */
 @media (max-width: 1400px) {
-  .rightPanel {
-    width: 280px;
-    max-width: calc(100% - 220px);
+  .contentGrid {
+    grid-template-columns: 1fr 280px;
   }
 }
 
 @media (max-width: 1024px) {
-  .overlayContent {
-    flex-direction: column;
-  }
-
-  .mainContent {
-    padding: 12px;
+  .contentGrid {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
   }
 
   .rightPanel {
-    width: 100%;
     max-height: 400px;
     flex-direction: row;
     overflow-x: auto;
     overflow-y: hidden;
-    padding: 12px;
   }
 
   .statsSection,
   .eventsSection {
     min-width: 300px;
     flex: 0 0 300px;
-  }
-  
-  .dashboard {
-    height: auto;
-    min-height: calc(100vh - 64px);
   }
 }
 

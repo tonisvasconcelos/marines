@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useI18n } from '../utils/useI18n';
@@ -7,12 +8,15 @@ import DashboardMapMapLibre from '../components/map/DashboardMapMapLibre';
 import OpsKpiBar from '../modules/dashboard/OpsKpiBar';
 import OpsEventFeed from '../modules/dashboard/OpsEventFeed';
 import OpsStatsPanel from '../modules/dashboard/OpsStatsPanel';
+import DashboardMapWidget from '../components/map/DashboardMapWidget';
+import FullscreenMapModal from '../components/map/FullscreenMapModal';
 import styles from './Dashboard.module.css';
 
 function Dashboard() {
   const navigate = useNavigate();
   const { t } = useI18n();
   const { tenant } = useAuth();
+  const [isMapFullscreen, setIsMapFullscreen] = useState(false);
 
   // Fetch tactical dashboard data
   const { data: stats, isLoading: statsLoading } = useQuery({
@@ -43,17 +47,6 @@ function Dashboard() {
     refetchInterval: 15000, // Refresh every 15 seconds
   });
 
-  const { data: geofences } = useQuery({
-    queryKey: ['dashboard', 'geofences'],
-    queryFn: () => api.get('/dashboard/geofences'),
-    refetchInterval: 60000, // Refresh every minute
-  });
-
-  const { data: opsSites } = useQuery({
-    queryKey: ['opsSites'],
-    queryFn: () => api.get('/ops-sites'),
-  });
-
   // CRITICAL: Client-side tenant filtering as defensive measure
   // Backend already filters by tenantId, but this ensures no cross-tenant data leaks
   const filteredVessels = activeVessels?.filter((vessel) => {
@@ -72,54 +65,57 @@ function Dashboard() {
 
   return (
     <div className={styles.dashboard}>
-      {/* Full-screen Map Background */}
-      <div className={styles.mapBackground}>
-        <DashboardMapMapLibre
+      {/* Main Dashboard Layout */}
+      <div className={styles.dashboardContent}>
+        {/* Header */}
+        <div className={styles.header}>
+          <div>
+            <h1 className={styles.title}>{t('dashboard.operationsCenter')}</h1>
+            <p className={styles.subtitle}>{t('dashboard.maritimeAwareness')}</p>
+          </div>
+          <div className={styles.statusIndicator}>
+            <span className={styles.statusDot}></span>
+            <span>{t('dashboard.live')}</span>
+          </div>
+        </div>
+
+        {/* KPI Bar */}
+        <OpsKpiBar stats={stats} />
+
+        {/* Main Content Grid */}
+        <div className={styles.contentGrid}>
+          {/* Left Column: Map Widget */}
+          <div className={styles.mapWidgetContainer}>
+            <DashboardMapWidget
+              vessels={filteredVessels}
+              onVesselClick={handleVesselClick}
+              onExpand={() => setIsMapFullscreen(true)}
+            />
+          </div>
+
+          {/* Right Panel: Stats + Events */}
+          <div className={styles.rightPanel}>
+            {/* Situational Awareness Panel */}
+            <div className={styles.statsSection}>
+              <OpsStatsPanel stats={stats} vessels={filteredVessels} />
+            </div>
+
+            {/* Tactical Event Feed (Ops Log) */}
+            <div className={styles.eventsSection}>
+              <OpsEventFeed events={events} isLoading={eventsLoading} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Fullscreen Map Modal */}
+      {isMapFullscreen && (
+        <FullscreenMapModal
           vessels={filteredVessels}
-          geofences={geofences}
-          opsSites={opsSites}
           onVesselClick={handleVesselClick}
+          onClose={() => setIsMapFullscreen(false)}
         />
-      </div>
-
-      {/* Overlay Content - 3 Column Layout */}
-      <div className={styles.overlayContent}>
-        {/* Main Content: Header + KPIs + Map */}
-        <div className={styles.mainContent}>
-          {/* Compact Header */}
-          <div className={styles.header}>
-            <div>
-              <h1 className={styles.title}>{t('dashboard.operationsCenter')}</h1>
-              <p className={styles.subtitle}>{t('dashboard.maritimeAwareness')}</p>
-            </div>
-            <div className={styles.statusIndicator}>
-              <span className={styles.statusDot}></span>
-              <span>{t('dashboard.live')}</span>
-            </div>
-          </div>
-
-          {/* Compact KPI Bar */}
-          <OpsKpiBar stats={stats} />
-
-          {/* Map Container - fills remaining space */}
-          <div className={styles.mapContainer}>
-            {/* Map is in background layer */}
-          </div>
-        </div>
-
-        {/* Right Panel: Stats + Events */}
-        <div className={styles.rightPanel}>
-          {/* Situational Awareness Panel */}
-          <div className={styles.statsSection}>
-            <OpsStatsPanel stats={stats} vessels={filteredVessels} />
-          </div>
-
-          {/* Tactical Event Feed (Ops Log) */}
-          <div className={styles.eventsSection}>
-            <OpsEventFeed events={events} isLoading={eventsLoading} />
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
