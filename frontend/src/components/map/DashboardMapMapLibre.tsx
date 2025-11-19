@@ -18,7 +18,7 @@ import { getVesselsInZone } from '../../api/myshiptracking';
 import { useQuery } from '@tanstack/react-query';
 import styles from './DashboardMap.module.css';
 
-function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick }) {
+function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, showControls = true }) {
   const navigate = useNavigate();
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
@@ -377,22 +377,24 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick }) {
         />
       )}
       
-      {/* Vessel Search */}
-      <div className={styles.vesselSearchContainer}>
-        <VesselSearch
-          onSelectVessel={(vessel) => {
-            // Center map on selected vessel
-            if (mapRef.current && vessel.mmsi) {
-              // Fetch vessel position and center map
-              // For now, just trigger a search
-              console.log('Vessel selected:', vessel);
-            }
-          }}
-        />
-      </div>
+      {/* Vessel Search - Only show if controls are enabled */}
+      {showControls && (
+        <div className={styles.vesselSearchContainer}>
+          <VesselSearch
+            onSelectVessel={(vessel) => {
+              // Center map on selected vessel
+              if (mapRef.current && vessel.mmsi) {
+                // Fetch vessel position and center map
+                // For now, just trigger a search
+                console.log('Vessel selected:', vessel);
+              }
+            }}
+          />
+        </div>
+      )}
       
-      {/* Map Controls */}
-      {mapRef.current && (
+      {/* Map Controls - Only show if controls are enabled */}
+      {showControls && mapRef.current && (
         <>
           <MapControlButtons map={mapRef.current} vessels={vessels} />
           <CoordinateReadout map={mapRef.current} />
@@ -400,16 +402,18 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick }) {
         </>
       )}
       
-      {/* Overlay Controls */}
-      <OverlayControls
-        baseLayer={baseLayer}
-        onBaseLayerChange={handleBaseLayerChange}
-        overlays={overlays}
-        onOverlayToggle={handleOverlayToggle}
-      />
+      {/* Overlay Controls - Only show if controls are enabled */}
+      {showControls && (
+        <OverlayControls
+          baseLayer={baseLayer}
+          onBaseLayerChange={handleBaseLayerChange}
+          overlays={overlays}
+          onOverlayToggle={handleOverlayToggle}
+        />
+      )}
       
-      {/* Measurement Tool */}
-      {mapRef.current && (
+      {/* Measurement Tool - Only show if controls are enabled */}
+      {showControls && mapRef.current && (
         <MeasurementTool
           map={mapRef.current}
           enabled={measurementEnabled}
@@ -429,24 +433,26 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick }) {
         </div>
       )}
 
-      {/* Map Mode Selector - Simple Padrão/Carta Náutica buttons */}
-      <div className={styles.mapModeSelector}>
-        <div className={styles.mapModeHeader}>MAPA</div>
-        <div className={styles.mapModeButtons}>
-          <button
-            className={`${styles.mapModeButton} ${baseLayer === 'standard' ? styles.active : ''}`}
-            onClick={() => handleBaseLayerChange('standard')}
-          >
-            Padrão
-          </button>
-          <button
-            className={`${styles.mapModeButton} ${baseLayer === 'nautical' ? styles.active : ''}`}
-            onClick={() => handleBaseLayerChange('nautical')}
-          >
-            Carta Náutica
-          </button>
+      {/* Map Mode Selector - Only show if controls are enabled */}
+      {showControls && (
+        <div className={styles.mapModeSelector}>
+          <div className={styles.mapModeHeader}>MAPA</div>
+          <div className={styles.mapModeButtons}>
+            <button
+              className={`${styles.mapModeButton} ${baseLayer === 'standard' ? styles.active : ''}`}
+              onClick={() => handleBaseLayerChange('standard')}
+            >
+              Padrão
+            </button>
+            <button
+              className={`${styles.mapModeButton} ${baseLayer === 'nautical' ? styles.active : ''}`}
+              onClick={() => handleBaseLayerChange('nautical')}
+            >
+              Carta Náutica
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
