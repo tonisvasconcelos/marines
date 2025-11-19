@@ -202,7 +202,7 @@ export async function searchVessels(name: string): Promise<VesselSearchResult[]>
     return [];
   }
 
-  return makeProxyRequest<VesselSearchResult[]>('/api/myshiptracking/search', {
+  return makeProxyRequest<VesselSearchResult[]>('/myshiptracking/search', {
     name: name.trim(),
   });
 }
@@ -230,7 +230,7 @@ export async function getVesselStatus(
     params.imo = imo;
   }
 
-  return makeProxyRequest<VesselStatus>('/api/myshiptracking/vessel', params);
+  return makeProxyRequest<VesselStatus>('/myshiptracking/vessel', params);
 }
 
 /**
@@ -250,7 +250,7 @@ export async function getBulkStatus(
     mmsis = mmsis.slice(0, 100);
   }
 
-  return makeProxyRequest<VesselStatus[]>('/api/myshiptracking/vessel/bulk', {
+  return makeProxyRequest<VesselStatus[]>('/myshiptracking/vessel/bulk', {
     mmsis: mmsis.join(','),
     response: extended ? 'extended' : 'simple',
   });
@@ -272,7 +272,7 @@ export async function getVesselsNearby(
   // Clamp radius to valid range (1-100 NM)
   const clampedRadius = Math.max(1, Math.min(100, radius));
 
-  return makeProxyRequest<NearbyVessel[]>('/api/myshiptracking/vessel/nearby', {
+  return makeProxyRequest<NearbyVessel[]>('/myshiptracking/vessel/nearby', {
     mmsi,
     radius: clampedRadius,
     response: extended ? 'extended' : 'simple',
@@ -300,7 +300,7 @@ export async function getVesselsInZone(
     params.minutesBack = minutesBack;
   }
 
-  return makeProxyRequest<VesselStatus[]>('/api/myshiptracking/vessel/zone', params);
+  return makeProxyRequest<VesselStatus[]>('/myshiptracking/vessel/zone', params);
 }
 
 /**
@@ -341,6 +341,6 @@ export async function getVesselTrack(
     params.timegroup = Math.max(1, Math.min(60, timegroup));
   }
 
-  return makeProxyRequest<TrackPoint[]>('/api/myshiptracking/vessel/track', params);
+  return makeProxyRequest<TrackPoint[]>('/myshiptracking/vessel/track', params);
 }
 
