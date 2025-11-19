@@ -171,9 +171,20 @@ export function MapEngine({
         console.warn('[MapEngine] Error removing base tiles:', error);
       }
 
+      // Handle tile URLs - support subdomain pattern
+      let tileUrls = [styleConfig.rasterUrl];
+      if (styleConfig.rasterUrl.includes('{s}')) {
+        // Multiple subdomains for load balancing
+        tileUrls = ['a', 'b', 'c'].map(sub => 
+          styleConfig.rasterUrl.replace('{s}', sub).replace('{r}', '@2x')
+        );
+      } else if (styleConfig.rasterUrl.includes('{r}')) {
+        tileUrls = [styleConfig.rasterUrl.replace('{r}', '@2x')];
+      }
+      
       map.addSource('base-tiles', {
         type: 'raster',
-        tiles: [styleConfig.rasterUrl],
+        tiles: tileUrls,
         tileSize: 256,
       });
 
