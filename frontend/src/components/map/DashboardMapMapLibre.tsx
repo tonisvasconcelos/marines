@@ -117,7 +117,6 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, sho
       // Otherwise add to selection
       return [...prev, layerId];
     });
-    setBaseLayer(layerId);
   }, []);
 
   // Handle overlay toggle
