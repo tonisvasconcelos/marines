@@ -9,7 +9,7 @@
   font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
   font-size: 11px;
   color: #f1f5f9;
-  z-index: 1000;
+  z-index: 1001; /* Higher than right panel to ensure visibility */
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -17,6 +17,8 @@
   pointer-events: none;
   backdrop-filter: blur(10px);
   min-width: 180px;
+  /* Adjust position to avoid right panel overlap */
+  margin-right: 0;
 }
 
 .coordinateRow {
@@ -44,7 +46,8 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  z-index: 1000;
+  z-index: 1001; /* Higher than right panel to ensure visibility */
+  pointer-events: auto;
 }
 
 .controlButton {

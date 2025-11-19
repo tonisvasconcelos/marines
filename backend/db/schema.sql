@@ -80,3 +80,26 @@ CREATE INDEX IF NOT EXISTS idx_vaa_vessel_id ON vessel_agent_associations(vessel
 CREATE INDEX IF NOT EXISTS idx_vaa_agent_id ON vessel_agent_associations(agent_id);
 CREATE INDEX IF NOT EXISTS idx_vaa_tenant_id ON vessel_agent_associations(tenant_id);
 
+-- Port Call Operation Logs Table
+-- Stores operational events for vessels (creation, position updates, geofence entries, status changes)
+CREATE TABLE IF NOT EXISTS portcall_operation_logs (
+  id VARCHAR(255) PRIMARY KEY,
+  tenant_id VARCHAR(255) NOT NULL,
+  vessel_id VARCHAR(255),
+  event_type VARCHAR(50) NOT NULL,
+  description TEXT NOT NULL,
+  timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  position_lat DECIMAL(10, 8),
+  position_lon DECIMAL(11, 8),
+  previous_status VARCHAR(50),
+  current_status VARCHAR(50),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (vessel_id) REFERENCES vessels(id) ON DELETE SET NULL
+);
+
+-- Create indexes for operation logs
+CREATE INDEX IF NOT EXISTS idx_operation_logs_tenant_id ON portcall_operation_logs(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_operation_logs_vessel_id ON portcall_operation_logs(vessel_id);
+CREATE INDEX IF NOT EXISTS idx_operation_logs_event_type ON portcall_operation_logs(event_type);
+CREATE INDEX IF NOT EXISTS idx_operation_logs_timestamp ON portcall_operation_logs(timestamp DESC);
+

@@ -3,6 +3,7 @@ import { getMockPortCalls, getMockVessels, getMockAisPosition, getMockOpsSites }
 import * as myshiptracking from '../services/myshiptracking.js';
 import { getAisConfig } from '../services/aisConfig.js';
 import * as vesselDb from '../db/vessels.js';
+import * as operationLogsDb from '../db/operationLogs.js';
 
 const router = express.Router();
 
@@ -295,10 +296,18 @@ router.get('/active-vessels', async (req, res) => {
     return mockPositionData;
   };
   
+  // Track previous statuses for status change detection
+  const previousStatuses = new Map();
+  
   const activeVessels = await Promise.all(
     vessels.map(async (vessel) => {
       const portCall = portCalls.find((pc) => pc.vesselId === vessel.id && 
         (pc.status === 'IN_PROGRESS' || pc.status === 'PLANNED'));
+      
+      // Get previous status from stored position or default
+      const previousPosition = await vesselDb.getLatestPosition(vessel.id, tenantId).catch(() => null);
+      const previousStatus = previousPosition?.navStatus || 'AT_SEA';
+      previousStatuses.set(vessel.id, previousStatus);
       
       let position = null;
       let status = 'AT_SEA';
@@ -331,6 +340,24 @@ router.get('/active-vessels', async (req, res) => {
         position = await getVesselPosition(vessel);
       }
       
+      // Detect status change and log it
+      if (position && previousStatus && previousStatus !== status) {
+        try {
+          await operationLogsDb.createOperationLog({
+            tenantId,
+            vesselId: vessel.id,
+            eventType: 'STATUS_CHANGE',
+            description: `Vessel status changed from ${previousStatus} to ${status}`,
+            positionLat: position.lat,
+            positionLon: position.lon,
+            previousStatus,
+            currentStatus: status,
+          });
+        } catch (logError) {
+          console.error('Failed to create operation log for status change:', logError);
+        }
+      }
+      
       return {
         ...vessel,
         position,
@@ -347,12 +374,97 @@ router.get('/active-vessels', async (req, res) => {
     })
   );
   
+  // Check geofence entries for active vessels
+  const opsSites = getMockOpsSites(tenantId);
+  for (const vessel of activeVessels) {
+    if (!vessel.position || !vessel.position.lat || !vessel.position.lon) continue;
+    
+    const vesselPoint = { lat: vessel.position.lat, lon: vessel.position.lon };
+    
+    for (const site of opsSites) {
+      let isInside = false;
+      
+      // Check polygon geofence
+      if (site.polygon && site.polygon.length >= 3) {
+        isInside = checkPointInPolygon(vesselPoint, site.polygon);
+      } 
+      // Check circular geofence
+      else if (site.latitude && site.longitude) {
+        const radius = site.type === 'PORT' ? 5000 : 
+                      site.type === 'TERMINAL' ? 2000 : 
+                      site.type === 'BERTH' ? 500 : 10000;
+        isInside = checkPointInCircle(
+          vesselPoint,
+          { lat: site.latitude, lon: site.longitude },
+          radius
+        );
+      }
+      
+      // Create operation log for geofence entry
+      if (isInside) {
+        try {
+          await operationLogsDb.createOperationLog({
+            tenantId,
+            vesselId: vessel.id,
+            eventType: 'GEOFENCE_ENTRY',
+            description: `${vessel.name} entered ${site.name} (${site.type})`,
+            positionLat: vessel.position.lat,
+            positionLon: vessel.position.lon,
+          });
+        } catch (logError) {
+          console.error('Failed to create operation log for geofence entry:', logError);
+        }
+      }
+    }
+  }
+  
   res.json(activeVessels);
 });
 
 // GET /api/dashboard/events - Get recent tactical events
 router.get('/events', async (req, res) => {
   const { tenantId } = req;
+  
+  // Try to get events from operation logs database first
+  try {
+    const operationLogs = await operationLogsDb.getOperationLogs(tenantId, { limit: 50 });
+    
+    if (operationLogs && operationLogs.length > 0) {
+      // Transform operation logs to event format
+      const events = operationLogs.map((log) => {
+        // Map event types to severity
+        const severityMap = {
+          'VESSEL_CREATED': 'info',
+          'POSITION_UPDATE': 'info',
+          'STATUS_CHANGE': 'warning',
+          'GEOFENCE_ENTRY': 'warning',
+        };
+        
+        return {
+          id: log.id,
+          type: log.eventType,
+          severity: severityMap[log.eventType] || 'info',
+          timestamp: log.timestamp,
+          vesselId: log.vesselId,
+          message: log.description,
+          data: {
+            positionLat: log.positionLat,
+            positionLon: log.positionLon,
+            previousStatus: log.previousStatus,
+            currentStatus: log.currentStatus,
+          },
+        };
+      });
+      
+      res.json(events);
+      return;
+    }
+  } catch (error) {
+    console.error('Error fetching operation logs, falling back to mock events:', error);
+    // Fall through to mock events
+  }
+  
+  // Fallback to mock events if database is not available
   const portCalls = getMockPortCalls(tenantId);
   
   // Get vessels from database (with fallback to mock data)

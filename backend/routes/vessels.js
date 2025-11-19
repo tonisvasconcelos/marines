@@ -7,6 +7,7 @@ import {
   deleteVesselCustomerAssociation,
 } from '../data/mockData.js';
 import * as vesselDb from '../db/vessels.js';
+import * as operationLogsDb from '../db/operationLogs.js';
 
 const router = express.Router();
 
@@ -212,6 +213,21 @@ router.post('/', async (req, res) => {
       }
     }
     
+    // Create operation log for vessel creation
+    try {
+      await operationLogsDb.createOperationLog({
+        tenantId,
+        vesselId: newVessel.id,
+        eventType: 'VESSEL_CREATED',
+        description: `New vessel "${newVessel.name}" was created${newVessel.mmsi ? ` (MMSI: ${newVessel.mmsi})` : ''}${newVessel.imo ? ` (IMO: ${newVessel.imo})` : ''}`,
+        positionLat: aisData?.lat || aisData?.latitude || null,
+        positionLon: aisData?.lon || aisData?.longitude || null,
+      });
+    } catch (logError) {
+      console.error('Failed to create operation log for vessel creation:', logError);
+      // Don't fail the request if logging fails
+    }
+    
     res.status(201).json(newVessel);
   } catch (error) {
     console.error('Error creating vessel:', error);
@@ -344,6 +360,16 @@ router.get('/:id/position', async (req, res) => {
             // Store position in history (database with fallback to mock)
             try {
               await vesselDb.storePositionHistory(id, tenantId, positionData);
+              
+              // Create operation log for position update
+              await operationLogsDb.createOperationLog({
+                tenantId,
+                vesselId: id,
+                eventType: 'POSITION_UPDATE',
+                description: `Vessel position updated: ${positionData.lat.toFixed(6)}, ${positionData.lon.toFixed(6)}${positionData.sog ? ` (Speed: ${positionData.sog} kn)` : ''}`,
+                positionLat: positionData.lat,
+                positionLon: positionData.lon,
+              });
             } catch (error) {
               console.error('Failed to store position history:', error);
               // Don't fail the request if history storage fails
@@ -380,6 +406,19 @@ router.get('/:id/position', async (req, res) => {
     if (mockPosition && (mockPosition.lat || mockPosition.Lat) && (mockPosition.lon || mockPosition.Lon)) {
       try {
         await vesselDb.storePositionHistory(id, tenantId, mockPosition);
+        
+        const lat = mockPosition.lat || mockPosition.Lat;
+        const lon = mockPosition.lon || mockPosition.Lon;
+        
+        // Create operation log for position update
+        await operationLogsDb.createOperationLog({
+          tenantId,
+          vesselId: id,
+          eventType: 'POSITION_UPDATE',
+          description: `Vessel position updated: ${lat.toFixed(6)}, ${lon.toFixed(6)}${mockPosition.sog ? ` (Speed: ${mockPosition.sog} kn)` : ''}`,
+          positionLat: lat,
+          positionLon: lon,
+        });
       } catch (error) {
         console.error('Failed to store position history:', error);
         // Don't fail the request if history storage fails

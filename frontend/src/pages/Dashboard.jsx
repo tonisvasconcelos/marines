@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useI18n } from '../utils/useI18n';
+import { useAuth } from '../modules/auth/AuthContext';
 import { api } from '../utils/api';
 import DashboardMapMapLibre from '../components/map/DashboardMapMapLibre';
 import OpsKpiBar from '../modules/dashboard/OpsKpiBar';
@@ -11,6 +12,7 @@ import styles from './Dashboard.module.css';
 function Dashboard() {
   const navigate = useNavigate();
   const { t } = useI18n();
+  const { tenant } = useAuth();
 
   // Fetch tactical dashboard data
   const { data: stats, isLoading: statsLoading } = useQuery({
@@ -52,6 +54,14 @@ function Dashboard() {
     queryFn: () => api.get('/ops-sites'),
   });
 
+  // CRITICAL: Client-side tenant filtering as defensive measure
+  // Backend already filters by tenantId, but this ensures no cross-tenant data leaks
+  const filteredVessels = activeVessels?.filter((vessel) => {
+    if (!tenant?.id) return false;
+    // Filter by tenantId - ensure vessel belongs to current tenant
+    return vessel.tenantId === tenant.id;
+  }) || [];
+
   const handleVesselClick = (vessel) => {
     if (vessel.portCallId) {
       navigate(`/port-calls/${vessel.portCallId}`);
@@ -65,7 +75,7 @@ function Dashboard() {
       {/* Full-screen Map Background */}
       <div className={styles.mapBackground}>
         <DashboardMapMapLibre
-          vessels={activeVessels}
+          vessels={filteredVessels}
           geofences={geofences}
           opsSites={opsSites}
           onVesselClick={handleVesselClick}
@@ -101,7 +111,7 @@ function Dashboard() {
         <div className={styles.rightPanel}>
           {/* Situational Awareness Panel */}
           <div className={styles.statsSection}>
-            <OpsStatsPanel stats={stats} vessels={activeVessels} />
+            <OpsStatsPanel stats={stats} vessels={filteredVessels} />
           </div>
 
           {/* Tactical Event Feed (Ops Log) */}

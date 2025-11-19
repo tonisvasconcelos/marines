@@ -18,6 +18,9 @@ const eventIcons = {
   PORT_CALL_WARNING: FiAlertCircle,
   GEOFENCE_ENTRY: FiMapPin,
   GEOFENCE_EXIT: FiNavigation,
+  VESSEL_CREATED: FiAnchor,
+  POSITION_UPDATE: FiRadio,
+  STATUS_CHANGE: FiNavigation,
 };
 
 const eventColors = {
@@ -28,6 +31,9 @@ const eventColors = {
   PORT_CALL_WARNING: 'var(--warning)',
   GEOFENCE_ENTRY: 'var(--success)',
   GEOFENCE_EXIT: 'var(--primary-light)',
+  VESSEL_CREATED: 'var(--success)',
+  POSITION_UPDATE: 'var(--primary)',
+  STATUS_CHANGE: 'var(--warning)',
 };
 
 function OpsEventFeed({ events, isLoading }) {

@@ -24,7 +24,11 @@ function Topbar({ onMenuClick }) {
         </svg>
       </button>
       <div className={styles.center}>
-        <h1 className={styles.title}>Marines App</h1>
+        <img 
+          src="/navomnis_logo_horizontal_branco.png" 
+          alt="navomnis" 
+          className={styles.logo}
+        />
       </div>
       <div className={styles.right}>
         {tenant && <span className={styles.tenantName}>{tenant.name}</span>}

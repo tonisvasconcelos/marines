@@ -428,6 +428,25 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick }) {
           />
         </div>
       )}
+
+      {/* Map Mode Selector - Simple Padrão/Carta Náutica buttons */}
+      <div className={styles.mapModeSelector}>
+        <div className={styles.mapModeHeader}>MAPA</div>
+        <div className={styles.mapModeButtons}>
+          <button
+            className={`${styles.mapModeButton} ${baseLayer === 'standard' ? styles.active : ''}`}
+            onClick={() => handleBaseLayerChange('standard')}
+          >
+            Padrão
+          </button>
+          <button
+            className={`${styles.mapModeButton} ${baseLayer === 'nautical' ? styles.active : ''}`}
+            onClick={() => handleBaseLayerChange('nautical')}
+          >
+            Carta Náutica
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

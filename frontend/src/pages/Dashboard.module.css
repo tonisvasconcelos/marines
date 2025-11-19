@@ -36,6 +36,12 @@
   pointer-events: none; /* Allow clicks to pass through to map */
 }
 
+/* Ensure map controls are above right panel */
+.mapBackground :global(.mapControlButtons),
+.mapBackground :global(.coordinateReadout) {
+  z-index: 1001 !important;
+}
+
 /* Left section: Header + KPIs + Map */
 .mainContent {
   flex: 1;
@@ -120,7 +126,7 @@
 
 /* Right Panel: Stats + Events - Fixed width, scrollable */
 .rightPanel {
-  width: 360px;
+  width: 320px; /* Reduced from 360px to leave space for map controls */
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -133,6 +139,9 @@
   /* Custom scrollbar */
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
+  /* Leave space on right for map controls (buttons ~150px + coordinate readout ~180px) */
+  margin-right: 0;
+  box-sizing: border-box;
 }
 
 .rightPanel::-webkit-scrollbar {
@@ -180,7 +189,7 @@
 /* Responsive Design */
 @media (max-width: 1400px) {
   .rightPanel {
-    width: 320px;
+    width: 300px;
   }
 }
 

@@ -44,6 +44,19 @@
   letter-spacing: -0.5px;
 }
 
+.logo {
+  max-height: 40px;
+  height: auto;
+  width: auto;
+  object-fit: contain;
+  display: block; /* Ensure image displays */
+}
+
+/* Hide title when logo is present */
+.center:has(img.logo) .title {
+  display: none;
+}
+
 .right {
   display: flex;
   align-items: center;
