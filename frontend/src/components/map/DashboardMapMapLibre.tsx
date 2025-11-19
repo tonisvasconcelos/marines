@@ -367,6 +367,7 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, sho
         initialZoom={8}
         baseLayer={baseLayer}
         onBaseLayerChange={handleBaseLayerChange}
+        hideBuiltInControls={isDashboardWidget}
       />
       
       {/* Vessel Layer - renders vessels with clustering */}

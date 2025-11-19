@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { FiMaximize2, FiMinimize2, FiCrosshair, FiZoomIn } from 'react-icons/fi';
+import { FiCrosshair, FiZoomIn } from 'react-icons/fi';
 import styles from './MapViewSettings.module.css';
 
 /**
@@ -109,15 +108,6 @@ function MapViewSettings({
           >
             <FiCrosshair size={16} />
             <span>Center</span>
-          </button>
-          
-          <button
-            className={styles.controlButton}
-            onClick={handleFullscreen}
-            title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
-          >
-            {isFullscreen ? <FiMinimize2 size={16} /> : <FiMaximize2 size={16} />}
-            <span>{isFullscreen ? "Exit" : "Fullscreen"}</span>
           </button>
         </div>
       </div>

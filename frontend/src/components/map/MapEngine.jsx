@@ -53,6 +53,7 @@ export function MapEngine({
   initialZoom = 8,
   baseLayer = 'standard',
   onBaseLayerChange,
+  hideBuiltInControls = false, // Hide built-in zoom/fullscreen controls
 }) {
   const mapRef = useRef(null);
   const baseLayerRef = useRef(null);
@@ -96,11 +97,12 @@ export function MapEngine({
       preserveDrawingBuffer: true,
     });
 
-    // Add navigation controls (zoom buttons)
-    map.addControl(new maplibregl.NavigationControl(), 'top-left');
-
-    // Add fullscreen control
-    map.addControl(new maplibregl.FullscreenControl(), 'top-right');
+    // Add navigation controls (zoom buttons) - only if not hidden
+    if (!hideBuiltInControls) {
+      map.addControl(new maplibregl.NavigationControl(), 'top-left');
+      // Add fullscreen control
+      map.addControl(new maplibregl.FullscreenControl(), 'top-right');
+    }
 
     // Wait for map to load
     map.on('load', () => {
