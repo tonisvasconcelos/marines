@@ -378,8 +378,8 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, sho
         />
       )}
       
-      {/* Vessel Search - Hidden on dashboard (only show in fullscreen mode) */}
-      {false && showControls && (
+      {/* Vessel Search - Hidden in dashboard widget, only show in fullscreen mode */}
+      {showControls && !isDashboardWidget && (
         <div className={styles.vesselSearchContainer}>
           <VesselSearch
             onSelectVessel={(vessel) => {
@@ -394,16 +394,16 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, sho
         </div>
       )}
       
-      {/* Additional Map Controls - Hidden on dashboard (only show in fullscreen mode) */}
-      {false && showControls && mapRef.current && (
+      {/* Additional Map Controls - Hidden in dashboard widget, only show in fullscreen mode */}
+      {showControls && !isDashboardWidget && mapRef.current && (
         <>
           <CoordinateReadout map={mapRef.current} />
           <ScaleBar map={mapRef.current} />
         </>
       )}
       
-      {/* Overlay Controls - Only show if controls are enabled */}
-      {showControls && (
+      {/* Overlay Controls - Hidden in dashboard widget, only show in fullscreen mode */}
+      {showControls && !isDashboardWidget && (
         <OverlayControls
           baseLayer={baseLayer}
           onBaseLayerChange={handleBaseLayerChange}
@@ -412,8 +412,8 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, sho
         />
       )}
       
-      {/* Measurement Tool - Only show if controls are enabled */}
-      {showControls && mapRef.current && (
+      {/* Measurement Tool - Hidden in dashboard widget, only show in fullscreen mode */}
+      {showControls && !isDashboardWidget && mapRef.current && (
         <MeasurementTool
           map={mapRef.current}
           enabled={measurementEnabled}
