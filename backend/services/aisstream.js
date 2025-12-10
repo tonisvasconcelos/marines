@@ -99,9 +99,9 @@ async function streamPositions({ boundingBoxes, shipMMSI, timeoutMs = 2000, maxM
   const payload = {
     APIKey: apiKey,
     BoundingBoxes: boundingBoxes,
-    // AISStream supports: PositionReport, StandardClassBCSPositionReport
-    // ClassAPositionReport is NOT supported (returns error)
-    FilterMessageTypes: ['PositionReport', 'StandardClassBCSPositionReport'],
+    // AISStream only supports: PositionReport
+    // ClassAPositionReport and StandardClassBCSPositionReport are NOT supported (return errors)
+    FilterMessageTypes: ['PositionReport'],
   };
 
   if (shipMMSI && shipMMSI.length > 0) {
