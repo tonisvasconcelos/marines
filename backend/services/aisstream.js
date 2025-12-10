@@ -138,6 +138,7 @@ async function streamPositions({ boundingBoxes, shipMMSI, timeoutMs = 2000, maxM
         boundingBoxesCount: boundingBoxes.length,
         shipMMSI: shipMMSI?.length || 0,
         filterTypes: payload.FilterMessageTypes.length,
+        messageTypes: payload.FilterMessageTypes, // Log actual message types being sent
       });
       ws.send(JSON.stringify(payload));
     });
