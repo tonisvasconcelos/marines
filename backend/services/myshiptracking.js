@@ -48,13 +48,30 @@ function getAuthParams() {
 async function makeRequest(endpoint, params = {}) {
   const authParams = getAuthParams();
   const allParams = { ...authParams, ...params };
-  const queryString = new URLSearchParams(allParams).toString();
+  
+  // Build query string manually to ensure proper encoding
+  const queryParts = [];
+  for (const [key, value] of Object.entries(allParams)) {
+    if (value !== null && value !== undefined && value !== '') {
+      queryParts.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`);
+    }
+  }
+  const queryString = queryParts.join('&');
   const url = `${API_BASE_URL}/api/${API_VERSION}/${endpoint}${queryString ? `?${queryString}` : ''}`;
+  
+  // Debug: Log actual URL structure (without sensitive values)
+  const debugUrl = url.replace(/([?&])(apikey|secret)=[^&]*/g, (match, separator) => {
+    return separator === '?' ? '?[AUTH]' : '&[AUTH]';
+  });
   
   console.log('[MyShipTracking] API Request:', {
     endpoint,
-    url: url.replace(/[?&](apikey|secret)=[^&]*/g, ''),
+    url: debugUrl,
     paramsCount: Object.keys(params).length,
+    hasAuthParams: !!authParams.apikey && !!authParams.secret,
+    authParamsKeys: Object.keys(authParams),
+    queryStringLength: queryString.length,
+    queryStringPreview: queryString.substring(0, 50) + '...',
   });
   
   try {
