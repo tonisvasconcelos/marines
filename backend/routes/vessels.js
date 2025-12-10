@@ -7,7 +7,7 @@ import {
 } from '../data/mockData.js';
 import * as vesselDb from '../db/vessels.js';
 import * as operationLogsDb from '../db/operationLogs.js';
-import { fetchLatestPositionByMmsi } from '../services/aisstream.js';
+import { fetchLatestPosition, fetchLatestPositionByMmsi, fetchLatestPositionByImo } from '../services/myshiptracking.js';
 
 const router = express.Router();
 
@@ -35,16 +35,23 @@ router.get('/preview-position', async (req, res) => {
     return res.status(400).json({ message: 'IMO or MMSI is required' });
   }
   
-  // AISStream only supports MMSI, not IMO
-  if (!mmsi) {
+  // MyShipTracking supports both MMSI and IMO
+  let identifier, type;
+  if (mmsi) {
+    identifier = String(mmsi);
+    type = 'mmsi';
+  } else if (imo) {
+    identifier = String(imo);
+    type = 'imo';
+  } else {
     return res.status(400).json({ 
-      message: 'MMSI is required for AIS position preview. AISStream does not support IMO queries.' 
+      message: 'Either MMSI or IMO is required for AIS position preview.' 
     });
   }
   
-  // Try AISStream
+  // Try MyShipTracking
   try {
-    const position = await fetchLatestPositionByMmsi(String(mmsi));
+    const position = await fetchLatestPosition(identifier, { type });
     
     if (position && position.lat !== undefined && position.lon !== undefined) {
       const positionData = {
@@ -55,13 +62,13 @@ router.get('/preview-position', async (req, res) => {
         cog: position.cog,
         heading: position.heading,
         navStatus: position.navStatus,
-        source: 'aisstream',
+        source: 'myshiptracking',
       };
       res.json(positionData);
       return;
     }
   } catch (error) {
-    console.warn(`Failed to fetch preview position from AISStream:`, error.message);
+    console.warn(`Failed to fetch preview position from MyShipTracking:`, error.message);
     // Fall back to mock data
   }
   
@@ -99,12 +106,13 @@ router.post('/', async (req, res) => {
       flag,
     });
     
-    // Try to fetch initial position from AISStream if MMSI is provided
-    // Note: AISStream only supports MMSI, not IMO
+    // Try to fetch initial position from MyShipTracking if MMSI or IMO is provided
     let initialPosition = null;
-    if (mmsi) {
+    if (mmsi || imo) {
       try {
-        const position = await fetchLatestPositionByMmsi(String(mmsi));
+        const identifier = mmsi ? String(mmsi) : String(imo);
+        const type = mmsi ? 'mmsi' : 'imo';
+        const position = await fetchLatestPosition(identifier, { type });
         
         if (position && position.lat !== undefined && position.lon !== undefined) {
           initialPosition = position;
@@ -118,26 +126,25 @@ router.post('/', async (req, res) => {
               cog: position.cog,
               heading: position.heading,
               navStatus: position.navStatus,
-              source: 'aisstream',
+              source: 'myshiptracking',
             });
-            console.log(`[Vessel Creation] Stored initial position for vessel ${newVessel.id} from AISStream`);
+            console.log(`[Vessel Creation] Stored initial position for vessel ${newVessel.id} from MyShipTracking`);
           } catch (posError) {
             console.error('Failed to store initial position:', posError);
             // Continue even if position storage fails
           }
         }
       } catch (error) {
-        console.error('[Vessel Creation] Failed to fetch initial position from AISStream:', {
-          mmsi,
+        console.error('[Vessel Creation] Failed to fetch initial position from MyShipTracking:', {
+          identifier: mmsi || imo,
+          type: mmsi ? 'mmsi' : 'imo',
           vesselId: newVessel.id,
           error: error.message,
           errorType: error.constructor.name,
-          apiKeyConfigured: !!process.env.AISSTREAM_API_KEY,
+          apiKeyConfigured: !!process.env.MYSHIPTRACKING_API_KEY,
         });
         // Continue without AIS position - vessel creation succeeds regardless
       }
-    } else if (imo) {
-      console.warn(`Vessel created with IMO but no MMSI. AISStream requires MMSI for position queries.`);
     }
     
     // Create operation log for vessel creation
@@ -218,22 +225,33 @@ router.get('/:id/position', async (req, res) => {
       return res.status(404).json({ message: 'Vessel not found' });
     }
     
-    // Try AISStream first (now the default provider)
+    // Try MyShipTracking first (supports both MMSI and IMO)
+    let identifier, type;
     if (vessel.mmsi) {
-      console.log('[Vessel Position] Attempting to fetch from AISStream:', {
+      identifier = String(vessel.mmsi);
+      type = 'mmsi';
+    } else if (vessel.imo) {
+      identifier = String(vessel.imo);
+      type = 'imo';
+    }
+    
+    if (identifier) {
+      console.log('[Vessel Position] Attempting to fetch from MyShipTracking:', {
         vesselId: id,
         vesselName: vessel.name,
-        mmsi: vessel.mmsi,
-        apiKeyPresent: !!process.env.AISSTREAM_API_KEY,
+        identifier,
+        type,
+        apiKeyPresent: !!process.env.MYSHIPTRACKING_API_KEY,
       });
       
       try {
-        const position = await fetchLatestPositionByMmsi(String(vessel.mmsi));
+        const position = await fetchLatestPosition(identifier, { type });
         
         if (position && position.lat !== undefined && position.lon !== undefined) {
-          console.log('[Vessel Position] Successfully fetched from AISStream:', {
+          console.log('[Vessel Position] Successfully fetched from MyShipTracking:', {
             vesselId: id,
-            mmsi: vessel.mmsi,
+            identifier,
+            type,
             lat: position.lat,
             lon: position.lon,
           });
@@ -246,7 +264,7 @@ router.get('/:id/position', async (req, res) => {
             cog: position.cog,
             heading: position.heading,
             navStatus: position.navStatus,
-            source: 'aisstream',
+            source: 'myshiptracking',
           };
           
           // Store position in history
@@ -270,26 +288,28 @@ router.get('/:id/position', async (req, res) => {
           res.json(positionData);
           return;
         } else {
-          console.warn('[Vessel Position] AISStream returned null or invalid position:', {
+          console.warn('[Vessel Position] MyShipTracking returned null or invalid position:', {
             vesselId: id,
-            mmsi: vessel.mmsi,
+            identifier,
+            type,
             position: position,
           });
         }
       } catch (error) {
-        console.error('[Vessel Position] Failed to fetch position from AISStream:', {
+        console.error('[Vessel Position] Failed to fetch position from MyShipTracking:', {
           vesselId: id,
-          mmsi: vessel.mmsi,
+          identifier,
+          type,
           error: error.message,
           errorStack: error.stack,
           errorType: error.constructor.name,
-          apiKeyConfigured: !!process.env.AISSTREAM_API_KEY,
-          apiKeyLength: process.env.AISSTREAM_API_KEY?.length || 0,
+          apiKeyConfigured: !!process.env.MYSHIPTRACKING_API_KEY,
+          apiKeyLength: process.env.MYSHIPTRACKING_API_KEY?.length || 0,
         });
         // Fall through to fallback options
       }
     } else {
-      console.warn(`Vessel ${id} does not have MMSI. AISStream requires MMSI for position queries.`);
+      console.warn(`Vessel ${id} does not have MMSI or IMO. MyShipTracking requires MMSI or IMO for position queries.`);
     }
     
     // Fallback 1: Try to get latest stored position from database

@@ -3,7 +3,7 @@ import { getMockPortCalls, getMockVessels, getMockAisPosition, getMockOpsSites }
 import { getAisConfig } from '../services/aisConfig.js';
 import * as vesselDb from '../db/vessels.js';
 import * as operationLogsDb from '../db/operationLogs.js';
-import { fetchLatestPositionByMmsi } from '../services/aisstream.js';
+import { fetchLatestPosition } from '../services/myshiptracking.js';
 
 const router = express.Router();
 
@@ -113,17 +113,19 @@ router.get('/active-vessels', async (req, res) => {
   const aisConfig = getAisConfig(tenantId);
   
   // Log AIS configuration status (always log, not just in dev)
-  // Note: AISStream is configured via environment variables (AISSTREAM_API_KEY)
-  const apiKeyValue = process.env.AISSTREAM_API_KEY;
-  const hasAisStreamKey = !!apiKeyValue;
+  // Note: MyShipTracking is configured via environment variables (MYSHIPTRACKING_API_KEY, MYSHIPTRACKING_SECRET_KEY)
+  const apiKeyValue = process.env.MYSHIPTRACKING_API_KEY;
+  const secretKeyValue = process.env.MYSHIPTRACKING_SECRET_KEY;
+  const hasMyShipTrackingKey = !!apiKeyValue && !!secretKeyValue;
   console.log('[dashboard/active-vessels] AIS Configuration:', {
     tenantId,
-    provider: 'aisstream',
-    hasApiKey: hasAisStreamKey,
+    provider: 'myshiptracking',
+    hasApiKey: hasMyShipTrackingKey,
     apiKeyLength: apiKeyValue?.length || 0,
+    secretKeyLength: secretKeyValue?.length || 0,
     apiKeyType: typeof apiKeyValue,
     apiKeyFirstChars: apiKeyValue ? `${apiKeyValue.substring(0, 5)}...` : 'null/undefined',
-    allEnvKeys: Object.keys(process.env).filter(k => k.includes('AIS')),
+    allEnvKeys: Object.keys(process.env).filter(k => k.includes('MYSHIPTRACKING') || k.includes('AIS')),
   });
   
   // Normalize provider name (case-insensitive check)
@@ -150,14 +152,24 @@ router.get('/active-vessels', async (req, res) => {
       // Continue to try AIS API
     }
     
-    // SECOND: Try AISStream (now the default provider)
+    // SECOND: Try MyShipTracking (supports both MMSI and IMO)
+    let identifier, type;
     if (vessel.mmsi) {
+      identifier = String(vessel.mmsi);
+      type = 'mmsi';
+    } else if (vessel.imo) {
+      identifier = String(vessel.imo);
+      type = 'imo';
+    }
+    
+    if (identifier) {
       try {
-        console.log(`[getVesselPosition] Attempting to fetch AIS data from AISStream for vessel ${vessel.id} (${vessel.name})`, {
-          mmsi: vessel.mmsi,
+        console.log(`[getVesselPosition] Attempting to fetch AIS data from MyShipTracking for vessel ${vessel.id} (${vessel.name})`, {
+          identifier,
+          type,
         });
         
-        const position = await fetchLatestPositionByMmsi(String(vessel.mmsi));
+        const position = await fetchLatestPosition(identifier, { type });
         
         if (position && position.lat !== undefined && position.lon !== undefined) {
           const positionData = {
@@ -168,7 +180,7 @@ router.get('/active-vessels', async (req, res) => {
             cog: position.cog,
             heading: position.heading,
             navStatus: position.navStatus,
-            source: 'aisstream',
+            source: 'myshiptracking',
           };
           
           // Store position in history for future use

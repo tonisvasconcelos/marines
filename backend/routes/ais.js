@@ -1,42 +1,31 @@
 import express from 'express';
 import {
+  fetchLatestPosition,
   fetchLatestPositionByMmsi,
+  fetchLatestPositionByImo,
+  fetchTrack,
   fetchTrackByMmsi,
   fetchVesselsInZone,
-} from '../services/aisstream.js';
+} from '../services/myshiptracking.js';
 import * as vesselDb from '../db/vessels.js';
 
 const router = express.Router();
 
 // Helper function to get AIS configuration
 function getAisConfig() {
-  // AISStream only supports MMSI
-  // In the future, this could be tenant-specific or provider-specific
+  // MyShipTracking supports both MMSI and IMO
   return {
-    provider: 'aisstream',
-    supportedIdentifiers: ['MMSI'],
+    provider: 'myshiptracking',
+    supportedIdentifiers: ['MMSI', 'IMO'],
   };
 }
 
-// GET /api/ais/vessel/last-position?mmsi=123
+// GET /api/ais/vessel/last-position?mmsi=123 or ?imo=1234567
 router.get('/vessel/last-position', async (req, res) => {
   try {
     const { tenantId } = req;
     const { mmsi, imo } = req.query;
     const aisConfig = getAisConfig();
-    
-    // Check if provider supports the requested identifier
-    if (imo && !mmsi && !aisConfig.supportedIdentifiers.includes('IMO')) {
-      return res.status(400).json({ 
-        message: `MMSI is required. The current AIS provider (${aisConfig.provider}) only supports: ${aisConfig.supportedIdentifiers.join(', ')}.` 
-      });
-    }
-    
-    if (!mmsi && !aisConfig.supportedIdentifiers.includes('IMO')) {
-      return res.status(400).json({ 
-        message: `mmsi is required. The current AIS provider (${aisConfig.provider}) only supports: ${aisConfig.supportedIdentifiers.join(', ')}.` 
-      });
-    }
     
     if (!mmsi && !imo) {
       return res.status(400).json({ 
@@ -44,14 +33,33 @@ router.get('/vessel/last-position', async (req, res) => {
       });
     }
     
-    const position = await fetchLatestPositionByMmsi(String(mmsi));
+    // Determine identifier type and value
+    let identifier, type;
+    if (mmsi) {
+      identifier = String(mmsi);
+      type = 'mmsi';
+    } else {
+      identifier = String(imo);
+      type = 'imo';
+    }
+    
+    const position = await fetchLatestPosition(identifier, { type });
     if (!position) {
       return res.status(404).json({ message: 'Vessel not found' });
     }
     
-    // Try to find vessel by MMSI and store position history if found
+    // Try to find vessel by MMSI or IMO and store position history if found
     try {
-      const vessel = await vesselDb.getVesselByMmsi(String(mmsi), tenantId);
+      let vessel = null;
+      if (mmsi) {
+        vessel = await vesselDb.getVesselByMmsi(String(mmsi), tenantId);
+      } else if (imo) {
+        // Check if getVesselByImo exists, otherwise try to find by IMO
+        vessel = await vesselDb.getVesselByImo ? 
+          await vesselDb.getVesselByImo(String(imo), tenantId) :
+          null;
+      }
+      
       if (vessel) {
         const positionData = {
           lat: position.lat,
@@ -61,10 +69,10 @@ router.get('/vessel/last-position', async (req, res) => {
           cog: position.cog,
           heading: position.heading,
           navStatus: position.navStatus,
-          source: 'aisstream',
+          source: 'myshiptracking',
         };
         await vesselDb.storePositionHistory(vessel.id, tenantId, positionData);
-        console.log(`[AIS] Stored position history for vessel ${vessel.id} (MMSI: ${mmsi})`);
+        console.log(`[AIS] Stored position history for vessel ${vessel.id} (${type.toUpperCase()}: ${identifier})`);
       }
     } catch (error) {
       console.warn('Failed to store position history for AIS position:', error.message);
@@ -74,28 +82,22 @@ router.get('/vessel/last-position', async (req, res) => {
     res.json(position);
   } catch (error) {
     console.error('AIS last-position error:', error);
+    // Map specific errors to appropriate status codes
+    if (error.message.includes('not found')) {
+      return res.status(404).json({ message: error.message });
+    }
+    if (error.message.includes('Invalid API credentials') || error.message.includes('not configured')) {
+      return res.status(500).json({ message: 'AIS API configuration error' });
+    }
     res.status(500).json({ message: error.message || 'Failed to fetch position' });
   }
 });
 
-// GET /api/ais/vessel/track?mmsi=123
+// GET /api/ais/vessel/track?mmsi=123&hours=72 or ?imo=1234567&hours=72
 router.get('/vessel/track', async (req, res) => {
   try {
-    const { mmsi, imo } = req.query;
+    const { mmsi, imo, hours } = req.query;
     const aisConfig = getAisConfig();
-    
-    // Check if provider supports the requested identifier
-    if (imo && !mmsi && !aisConfig.supportedIdentifiers.includes('IMO')) {
-      return res.status(400).json({ 
-        message: `MMSI is required. The current AIS provider (${aisConfig.provider}) only supports: ${aisConfig.supportedIdentifiers.join(', ')}.` 
-      });
-    }
-    
-    if (!mmsi && !aisConfig.supportedIdentifiers.includes('IMO')) {
-      return res.status(400).json({ 
-        message: `mmsi is required. The current AIS provider (${aisConfig.provider}) only supports: ${aisConfig.supportedIdentifiers.join(', ')}.` 
-      });
-    }
     
     if (!mmsi && !imo) {
       return res.status(400).json({ 
@@ -103,10 +105,35 @@ router.get('/vessel/track', async (req, res) => {
       });
     }
     
-    const track = await fetchTrackByMmsi(String(mmsi));
+    // Parse hours parameter (default: 24 hours)
+    const hoursNum = hours ? parseInt(hours, 10) : 24;
+    if (isNaN(hoursNum) || hoursNum < 1 || hoursNum > 168) {
+      return res.status(400).json({ 
+        message: 'hours parameter must be a number between 1 and 168 (7 days)' 
+      });
+    }
+    
+    // Determine identifier type and value
+    let identifier, type;
+    if (mmsi) {
+      identifier = String(mmsi);
+      type = 'mmsi';
+    } else {
+      identifier = String(imo);
+      type = 'imo';
+    }
+    
+    const track = await fetchTrack(identifier, { type, hours: hoursNum });
     res.json(track);
   } catch (error) {
     console.error('AIS track error:', error);
+    // Map specific errors to appropriate status codes
+    if (error.message.includes('not found')) {
+      return res.status(404).json({ message: error.message });
+    }
+    if (error.message.includes('Invalid API credentials') || error.message.includes('not configured')) {
+      return res.status(500).json({ message: 'AIS API configuration error' });
+    }
     res.status(500).json({ message: error.message || 'Failed to fetch track' });
   }
 });
@@ -160,7 +187,7 @@ router.get('/vessels/:vesselId/last-position', async (req, res) => {
     const { tenantId } = req;
     const { vesselId } = req.params;
     
-    // Fetch vessel to get MMSI
+    // Fetch vessel to get MMSI or IMO
     const vessel = await vesselDb.getVesselById(vesselId, tenantId);
     
     if (!vessel) {
@@ -169,26 +196,21 @@ router.get('/vessels/:vesselId/last-position', async (req, res) => {
     
     const aisConfig = getAisConfig();
     
-    // Check if vessel has a supported identifier
-    const hasSupportedId = aisConfig.supportedIdentifiers.some(id => {
-      if (id === 'MMSI') return !!vessel.mmsi;
-      if (id === 'IMO') return !!vessel.imo;
-      return false;
-    });
-    
-    if (!hasSupportedId) {
+    // Check if vessel has a supported identifier (prefer MMSI, fallback to IMO)
+    let identifier, type;
+    if (vessel.mmsi) {
+      identifier = String(vessel.mmsi);
+      type = 'mmsi';
+    } else if (vessel.imo) {
+      identifier = String(vessel.imo);
+      type = 'imo';
+    } else {
       return res.status(400).json({ 
         message: `Vessel does not have a supported identifier. The current AIS provider (${aisConfig.provider}) requires: ${aisConfig.supportedIdentifiers.join(' or ')}.` 
       });
     }
     
-    if (!vessel.mmsi && aisConfig.supportedIdentifiers.includes('MMSI')) {
-      return res.status(400).json({ 
-        message: `Vessel does not have an MMSI number. The current AIS provider (${aisConfig.provider}) requires MMSI for position queries.` 
-      });
-    }
-    
-    const position = await fetchLatestPositionByMmsi(String(vessel.mmsi));
+    const position = await fetchLatestPosition(identifier, { type });
     if (!position) {
       return res.status(404).json({ message: 'Vessel position not found in AIS data' });
     }
@@ -203,10 +225,10 @@ router.get('/vessels/:vesselId/last-position', async (req, res) => {
         cog: position.cog,
         heading: position.heading,
         navStatus: position.navStatus,
-        source: 'aisstream',
+        source: 'myshiptracking',
       };
       await vesselDb.storePositionHistory(vesselId, tenantId, positionData);
-      console.log(`[AIS] Stored position history for vessel ${vesselId} (MMSI: ${vessel.mmsi})`);
+      console.log(`[AIS] Stored position history for vessel ${vesselId} (${type.toUpperCase()}: ${identifier})`);
     } catch (error) {
       console.warn('Failed to store position history:', error.message);
       // Don't fail the request if history storage fails
@@ -215,18 +237,32 @@ router.get('/vessels/:vesselId/last-position', async (req, res) => {
     res.json(position);
   } catch (error) {
     console.error('AIS vessel last-position error:', error);
+    // Map specific errors to appropriate status codes
+    if (error.message.includes('not found')) {
+      return res.status(404).json({ message: error.message });
+    }
+    if (error.message.includes('Invalid API credentials') || error.message.includes('not configured')) {
+      return res.status(500).json({ message: 'AIS API configuration error' });
+    }
     res.status(500).json({ message: error.message || 'Failed to fetch vessel position' });
   }
 });
 
-// GET /api/ais/vessels/:vesselId/track - Bridge endpoint that accepts vesselId
+// GET /api/ais/vessels/:vesselId/track?hours=72 - Bridge endpoint that accepts vesselId
 router.get('/vessels/:vesselId/track', async (req, res) => {
   try {
     const { tenantId } = req;
     const { vesselId } = req.params;
     const hours = parseInt(req.query.hours) || 24;
     
-    // Fetch vessel to get MMSI
+    // Validate hours parameter
+    if (isNaN(hours) || hours < 1 || hours > 168) {
+      return res.status(400).json({ 
+        message: 'hours parameter must be a number between 1 and 168 (7 days)' 
+      });
+    }
+    
+    // Fetch vessel to get MMSI or IMO
     const vessel = await vesselDb.getVesselById(vesselId, tenantId);
     
     if (!vessel) {
@@ -235,35 +271,32 @@ router.get('/vessels/:vesselId/track', async (req, res) => {
     
     const aisConfig = getAisConfig();
     
-    // Check if vessel has a supported identifier
-    const hasSupportedId = aisConfig.supportedIdentifiers.some(id => {
-      if (id === 'MMSI') return !!vessel.mmsi;
-      if (id === 'IMO') return !!vessel.imo;
-      return false;
-    });
-    
-    if (!hasSupportedId) {
+    // Check if vessel has a supported identifier (prefer MMSI, fallback to IMO)
+    let identifier, type;
+    if (vessel.mmsi) {
+      identifier = String(vessel.mmsi);
+      type = 'mmsi';
+    } else if (vessel.imo) {
+      identifier = String(vessel.imo);
+      type = 'imo';
+    } else {
       return res.status(400).json({ 
         message: `Vessel does not have a supported identifier. The current AIS provider (${aisConfig.provider}) requires: ${aisConfig.supportedIdentifiers.join(' or ')}.` 
       });
     }
     
-    if (!vessel.mmsi && aisConfig.supportedIdentifiers.includes('MMSI')) {
-      return res.status(400).json({ 
-        message: `Vessel does not have an MMSI number. The current AIS provider (${aisConfig.provider}) requires MMSI for track queries.` 
-      });
-    }
-    
-    // Note: AISStream is real-time only, so we collect recent positions
-    // The hours parameter is ignored as AISStream doesn't provide historical data
-    const track = await fetchTrackByMmsi(String(vessel.mmsi), { 
-      timeoutMs: Math.min(hours * 1000, 10000), // Cap timeout at 10s
-      max: Math.min(hours * 10, 200) // Approximate max positions based on hours
-    });
+    const track = await fetchTrack(identifier, { type, hours });
     
     res.json(track);
   } catch (error) {
     console.error('AIS vessel track error:', error);
+    // Map specific errors to appropriate status codes
+    if (error.message.includes('not found')) {
+      return res.status(404).json({ message: error.message });
+    }
+    if (error.message.includes('Invalid API credentials') || error.message.includes('not configured')) {
+      return res.status(500).json({ message: 'AIS API configuration error' });
+    }
     res.status(500).json({ message: error.message || 'Failed to fetch vessel track' });
   }
 });

@@ -1,6 +1,6 @@
 /**
- * AISStream API Client (via backend proxy under /api/ais)
- * Documentation: https://aisstream.io/documentation
+ * MyShipTracking API Client (via backend proxy under /api/ais)
+ * Documentation: https://api.myshiptracking.com/
  */
 
 /**
@@ -47,22 +47,22 @@ async function makeProxyRequest<T>(
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
     // Always log to help debug production issues
-    console.log('[AISStream API] ✅ Authorization header added:', {
+    console.log('[MyShipTracking API] ✅ Authorization header added:', {
       tokenLength: token.length,
       tokenPrefix: token.substring(0, 20) + '...',
       headerValue: `Bearer ${token.substring(0, 20)}...`,
     });
   } else {
     // Critical error - always log
-    console.error('[AISStream API] ❌ No authentication token found!');
-    console.error('[AISStream API] localStorage keys:', Object.keys(localStorage));
-    console.error('[AISStream API] This will cause 401 Unauthorized errors');
-    console.error('[AISStream API] Please ensure you are logged in');
+    console.error('[MyShipTracking API] ❌ No authentication token found!');
+    console.error('[MyShipTracking API] localStorage keys:', Object.keys(localStorage));
+    console.error('[MyShipTracking API] This will cause 401 Unauthorized errors');
+    console.error('[MyShipTracking API] Please ensure you are logged in');
   }
 
   try {
     // Always log request details to debug auth issues
-    console.log('[AISStream API] Making request:', {
+    console.log('[MyShipTracking API] Making request:', {
       url: url.toString(),
       hasAuthHeader: !!headers['Authorization'],
       authHeaderPresent: 'Authorization' in headers,
@@ -80,8 +80,8 @@ async function makeProxyRequest<T>(
       const errorData = await response.json().catch(() => ({ error: response.statusText }));
       
       if (response.status === 401) {
-        console.error('[AISStream API] ❌ 401 Unauthorized - Authentication failed!');
-        console.error('[AISStream API] Request details:', {
+        console.error('[MyShipTracking API] ❌ 401 Unauthorized - Authentication failed!');
+        console.error('[MyShipTracking API] Request details:', {
           endpoint: url.toString(),
           hasToken: !!token,
           tokenLength: token?.length || 0,
@@ -90,7 +90,7 @@ async function makeProxyRequest<T>(
           responseStatus: response.status,
           responseHeaders: Object.fromEntries(response.headers.entries()),
         });
-        console.error('[AISStream API] Check if token is valid and not expired');
+        console.error('[MyShipTracking API] Check if token is valid and not expired');
       }
       
       throw new Error(errorData.error || errorData.message || `API error: ${response.status}`);
@@ -202,14 +202,14 @@ function attachLng<T extends { lon?: number; lng?: number }>(item: T): T & { lng
  * Endpoint: /api/v2/vessel/search
  */
 export async function searchVessels(name: string): Promise<VesselSearchResult[]> {
-  console.warn('[AISStream] Search not supported; returning empty list.');
+  console.warn('[MyShipTracking] Search not supported; returning empty list.');
     return [];
 }
 
 /**
  * Get vessel status (single vessel)
- * Endpoint: /api/v2/vessel
- * Note: AISStream API only supports MMSI, not IMO
+ * Endpoint: /api/vessel/last-position
+ * Note: MyShipTracking API supports both MMSI and IMO
  */
 export async function getVesselStatus(
   mmsi?: string,
@@ -220,14 +220,12 @@ export async function getVesselStatus(
     throw new Error('Either mmsi or imo must be provided');
   }
 
-  // AISStream backend only supports MMSI filtering
-  if (!mmsi && imo) {
-    throw new Error('MMSI is required for AIS position queries. IMO is not supported by the AISStream API.');
+  const params: Record<string, string | boolean> = {};
+  if (mmsi) {
+    params.mmsi = mmsi;
+  } else if (imo) {
+    params.imo = imo;
   }
-
-  const params: Record<string, string | boolean> = {
-    mmsi: mmsi!,
-  };
 
   const result = await makeProxyRequest<VesselStatus>('/ais/vessel/last-position', params);
   return attachLng(result);
@@ -249,7 +247,7 @@ export async function getBulkStatus(
   const results = await Promise.all(
     limited.map((id) =>
       getVesselStatus(id, undefined, extended).catch((err) => {
-        console.warn('[AISStream] Bulk fetch failed for', id, err);
+        console.warn('[MyShipTracking] Bulk fetch failed for', id, err);
         return null;
       })
     )
@@ -266,7 +264,7 @@ export async function getVesselsNearby(
   radius: number = 20,
   extended: boolean = false
 ): Promise<NearbyVessel[]> {
-  console.warn('[AISStream] Nearby query not supported; returning empty list.');
+  console.warn('[MyShipTracking] Nearby query not supported; returning empty list.');
   return [];
 }
 
@@ -292,8 +290,8 @@ export async function getVesselsInZone(
 
 /**
  * Get vessel historical track
- * Endpoint: /api/v2/vessel/track
- * Note: AISStream API only supports MMSI, not IMO
+ * Endpoint: /api/vessel/track
+ * Note: MyShipTracking API supports both MMSI and IMO
  */
 export async function getVesselTrack(
   mmsi?: string,
@@ -307,18 +305,21 @@ export async function getVesselTrack(
     throw new Error('Either mmsi or imo must be provided');
   }
 
-  // AISStream backend only supports MMSI filtering
-  if (!mmsi && imo) {
-    throw new Error('MMSI is required for AIS track queries. IMO is not supported by the AISStream API.');
+  const params: Record<string, string | number> = {};
+  if (mmsi) {
+    params.mmsi = mmsi;
+  } else if (imo) {
+    params.imo = imo;
   }
 
-  const params: Record<string, string | number> = {
-    mmsi: mmsi!,
-  };
-
-  if (from && to) {
-    params.fromdate = from.toISOString().split('T')[0];
-    params.todate = to.toISOString().split('T')[0];
+  // Calculate hours from days or date range
+  if (days) {
+    params.hours = days * 24;
+  } else if (from && to) {
+    const hoursDiff = Math.ceil((to.getTime() - from.getTime()) / (1000 * 60 * 60));
+    params.hours = Math.min(hoursDiff, 168); // Cap at 7 days
+  } else {
+    params.hours = 24; // Default to 24 hours
   }
 
   const data = await makeProxyRequest<TrackPoint[]>('/ais/vessel/track', params);

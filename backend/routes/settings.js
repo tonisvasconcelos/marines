@@ -47,32 +47,32 @@ router.get('/users', requireRole('ADMIN'), (req, res) => {
 });
 
 router.get('/ais', (req, res) => {
-  const wsUrl = process.env.AISSTREAM_WS_URL || 'wss://stream.aisstream.io/v0/stream';
-  const apiKeyValue = process.env.AISSTREAM_API_KEY;
-  const apiKeyPresent = !!apiKeyValue;
+  const apiKeyValue = process.env.MYSHIPTRACKING_API_KEY;
+  const secretKeyValue = process.env.MYSHIPTRACKING_SECRET_KEY;
+  const apiKeyPresent = !!apiKeyValue && !!secretKeyValue;
   
   // Debug logging to diagnose API key detection issues
-  console.log('[settings/ais] API Key Check:', {
+  console.log('[settings/ais] MyShipTracking API Key Check:', {
     apiKeyPresent,
     apiKeyLength: apiKeyValue?.length || 0,
+    secretKeyLength: secretKeyValue?.length || 0,
     apiKeyType: typeof apiKeyValue,
     apiKeyFirstChars: apiKeyValue ? `${apiKeyValue.substring(0, 5)}...` : 'null/undefined',
-    allAisEnvKeys: Object.keys(process.env).filter(k => k.includes('AIS')),
+    allEnvKeys: Object.keys(process.env).filter(k => k.includes('MYSHIPTRACKING') || k.includes('AIS')),
   });
   
-  // AISStream only supports MMSI, not IMO
-  // This configuration allows future AIS providers to support IMO or both
+  // MyShipTracking supports both MMSI and IMO
   res.json({
-    provider: 'aisstream',
+    provider: 'myshiptracking',
     apiKeyPresent,
-    wsUrl,
-    supportedIdentifiers: ['MMSI'], // AISStream only supports MMSI
+    apiUrl: process.env.MYSHIPTRACKING_API_URL || 'https://api.myshiptracking.com',
+    supportedIdentifiers: ['MMSI', 'IMO'], // MyShipTracking supports both
   });
 });
 
 router.put('/ais', requireRole('ADMIN'), async (req, res) => {
   res.status(200).json({
-    message: 'AISStream is managed via server environment variables (AISSTREAM_API_KEY, AISSTREAM_WS_URL). No tenant-level configuration is required.',
+    message: 'MyShipTracking is managed via server environment variables (MYSHIPTRACKING_API_KEY, MYSHIPTRACKING_SECRET_KEY). No tenant-level configuration is required.',
   });
 });
 
