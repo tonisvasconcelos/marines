@@ -99,7 +99,9 @@ async function streamPositions({ boundingBoxes, shipMMSI, timeoutMs = 2000, maxM
   const payload = {
     APIKey: apiKey,
     BoundingBoxes: boundingBoxes,
-    FilterMessageTypes: ['PositionReport', 'ClassAPositionReport', 'StandardClassBCSPositionReport'],
+    // AISStream supports: PositionReport, StandardClassBCSPositionReport
+    // ClassAPositionReport is NOT supported (returns error)
+    FilterMessageTypes: ['PositionReport', 'StandardClassBCSPositionReport'],
   };
 
   if (shipMMSI && shipMMSI.length > 0) {
@@ -145,6 +147,16 @@ async function streamPositions({ boundingBoxes, shipMMSI, timeoutMs = 2000, maxM
         const rawMessage = data.toString();
         const parsed = JSON.parse(rawMessage);
         
+        // Handle error messages from AISStream
+        if (parsed.error) {
+          console.error('[AISStream] Error message received:', {
+            error: parsed.error,
+            fullMessage: parsed,
+          });
+          // Don't treat errors as fatal - continue waiting for valid messages
+          return;
+        }
+        
         // Log the actual message structure to understand AISStream format
         console.log('[AISStream] Raw message received:', {
           messageKeys: Object.keys(parsed),
@@ -173,7 +185,7 @@ async function streamPositions({ boundingBoxes, shipMMSI, timeoutMs = 2000, maxM
           // Log more details about why parsing failed
           console.debug('[AISStream] Received message without valid MMSI:', {
             hasMeta: !!parsed?.MetaData || !!parsed?.metadata,
-            hasPosition: !!parsed?.PositionReport || !!parsed?.ClassAPositionReport,
+            hasPosition: !!parsed?.PositionReport || !!parsed?.StandardClassBCSPositionReport,
             hasMessage: !!parsed?.Message,
             messageType: parsed?.MessageType || parsed?.messageType,
             messageKeys: Object.keys(parsed),
