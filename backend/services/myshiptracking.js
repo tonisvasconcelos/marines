@@ -24,9 +24,10 @@ function getSecretKey() {
 }
 
 /**
- * Get authentication headers for API requests
+ * Get authentication parameters for API requests
+ * MyShipTracking uses query parameters, not headers
  */
-function getAuthHeaders() {
+function getAuthParams() {
   const apiKey = getApiKey();
   const secretKey = getSecretKey();
   
@@ -35,30 +36,33 @@ function getAuthHeaders() {
   }
   
   return {
-    'X-API-Key': apiKey,
-    'X-Secret-Key': secretKey,
-    'Content-Type': 'application/json',
-    'Accept': 'application/json',
+    apikey: apiKey,
+    secret: secretKey,
   };
 }
 
 /**
  * Make HTTP request to MyShipTracking API
+ * Authentication uses query parameters (apikey, secret), not headers
  */
 async function makeRequest(endpoint, params = {}) {
-  const headers = getAuthHeaders();
-  const queryString = new URLSearchParams(params).toString();
+  const authParams = getAuthParams();
+  const allParams = { ...authParams, ...params };
+  const queryString = new URLSearchParams(allParams).toString();
   const url = `${API_BASE_URL}/api/${API_VERSION}/${endpoint}${queryString ? `?${queryString}` : ''}`;
   
   console.log('[MyShipTracking] API Request:', {
     endpoint,
-    url: url.replace(/[?&](api_key|secret)=[^&]*/g, ''),
+    url: url.replace(/[?&](apikey|secret)=[^&]*/g, ''),
     paramsCount: Object.keys(params).length,
   });
   
   try {
     const response = await fetch(url, { 
-      headers,
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
       method: 'GET',
     });
     
@@ -73,6 +77,7 @@ async function makeRequest(endpoint, params = {}) {
         errorCode,
         errorMessage,
         endpoint,
+        responseData: data,
       });
       
       // Handle specific error codes
@@ -226,7 +231,7 @@ export async function fetchLatestPosition(identifier, { type = 'mmsi' } = {}) {
   
   try {
     const params = type === 'imo' ? { imo: identifier } : { mmsi: identifier };
-    const response = await makeRequest('vessel/status', params);
+    const response = await makeRequest('vessels', params);
     const position = normalizePosition(response);
     
     if (position) {
@@ -367,7 +372,7 @@ export async function fetchVesselsInZone(bounds, { max = 150 } = {}) {
       maxlon: Number(bounds.maxlon),
     };
     
-    const response = await makeRequest('vessels/zone', params);
+    const response = await makeRequest('vessels/in-zone', params);
     const vessels = normalizeZoneVessels(response);
     
     // Limit results if needed
