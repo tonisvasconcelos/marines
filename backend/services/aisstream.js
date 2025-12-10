@@ -17,40 +17,78 @@ function requireApiKey() {
 }
 
 function normalizePosition(msg) {
-  const meta = msg?.MetaData || msg?.metadata || {};
-  const position = msg?.PositionReport || msg?.ClassAPositionReport || msg?.Message || {};
+  // AISStream can send messages in different formats
+  // Try multiple possible structures
+  
+  // Format 1: MetaData + PositionReport structure
+  const meta = msg?.MetaData || msg?.metadata || msg?.Meta || {};
+  const position = msg?.PositionReport || msg?.ClassAPositionReport || msg?.StandardClassBCSPositionReport || msg?.Message || msg?.message || {};
+  
+  // Format 2: Direct properties on message
+  const direct = msg || {};
 
+  // Try to extract coordinates from multiple possible locations
   const lat =
     meta.Latitude ??
     meta.latitude ??
+    meta.Lat ??
     position.Latitude ??
-    position.latitude;
+    position.latitude ??
+    position.Lat ??
+    direct.Latitude ??
+    direct.latitude ??
+    direct.Lat;
+    
   const lon =
     meta.Longitude ??
     meta.longitude ??
+    meta.Lon ??
     position.Longitude ??
-    position.longitude;
+    position.longitude ??
+    position.Lon ??
+    direct.Longitude ??
+    direct.longitude ??
+    direct.Lon;
 
-  if (lat === undefined || lon === undefined) return null;
+  if (lat === undefined || lon === undefined || lat === null || lon === null) {
+    return null;
+  }
 
   const timestamp =
     meta.Timestamp ??
     meta.timestamp ??
     position.Timestamp ??
     position.timestamp ??
+    direct.Timestamp ??
+    direct.timestamp ??
     new Date().toISOString();
 
+  // Extract MMSI from multiple possible locations
+  const mmsi = 
+    meta.MMSI || 
+    meta.mmsi || 
+    position.MMSI || 
+    position.mmsi || 
+    direct.MMSI || 
+    direct.mmsi ||
+    msg?.MMSI || 
+    msg?.mmsi;
+
+  if (!mmsi) {
+    return null; // MMSI is required
+  }
+
   return {
-    mmsi: meta.MMSI || meta.mmsi || position.MMSI || position.mmsi || msg?.MMSI || msg?.mmsi,
-    imo: meta.IMO || meta.imo || position.IMO || position.imo,
-    name: meta.ShipName || meta.shipName || position.ShipName || position.shipName,
-    callSign: meta.CallSign || position.CallSign,
+    mmsi: String(mmsi),
+    imo: meta.IMO || meta.imo || position.IMO || position.imo || direct.IMO || direct.imo,
+    name: meta.ShipName || meta.shipName || position.ShipName || position.shipName || direct.ShipName || direct.shipName,
+    callSign: meta.CallSign || meta.callSign || position.CallSign || position.callSign || direct.CallSign || direct.callSign,
     lat: Number(lat),
     lon: Number(lon),
-    cog: Number(meta.COG ?? position.COG ?? position.Cog ?? position.cog) || undefined,
-    sog: Number(meta.SOG ?? position.SOG ?? position.Speed ?? position.sog) || undefined,
-    heading: Number(meta.Heading ?? position.Heading ?? position.TrueHeading) || undefined,
-    navStatus: meta.NavigationalStatus || position.NavigationalStatus || position.NavStatus,
+    cog: Number(meta.COG ?? position.COG ?? position.Cog ?? position.cog ?? direct.COG ?? direct.cog) || undefined,
+    sog: Number(meta.SOG ?? position.SOG ?? position.Speed ?? position.sog ?? direct.SOG ?? direct.sog) || undefined,
+    heading: Number(meta.Heading ?? position.Heading ?? position.TrueHeading ?? direct.Heading ?? direct.heading) || undefined,
+    navStatus: meta.NavigationalStatus || position.NavigationalStatus || position.NavStatus || direct.NavigationalStatus || direct.navStatus,
     timestamp: typeof timestamp === 'string' ? timestamp : new Date(timestamp).toISOString(),
   };
 }
@@ -104,11 +142,24 @@ async function streamPositions({ boundingBoxes, shipMMSI, timeoutMs = 2000, maxM
 
     ws.on('message', (data) => {
       try {
-        const parsed = JSON.parse(data.toString());
+        const rawMessage = data.toString();
+        const parsed = JSON.parse(rawMessage);
+        
+        // Log the actual message structure to understand AISStream format
+        console.log('[AISStream] Raw message received:', {
+          messageKeys: Object.keys(parsed),
+          hasMetaData: !!parsed.MetaData,
+          hasMetadata: !!parsed.metadata,
+          hasMessageType: !!parsed.MessageType,
+          hasMessage: !!parsed.Message,
+          messageType: parsed.MessageType || parsed.messageType,
+          topLevelKeys: Object.keys(parsed).slice(0, 10),
+        });
+        
         const normalized = normalizePosition(parsed);
         if (normalized?.mmsi) {
           results.set(normalized.mmsi, normalized);
-          console.log('[AISStream] Received position message:', {
+          console.log('[AISStream] Successfully parsed position message:', {
             mmsi: normalized.mmsi,
             totalResults: results.size,
             lat: normalized.lat,
@@ -119,10 +170,14 @@ async function streamPositions({ boundingBoxes, shipMMSI, timeoutMs = 2000, maxM
             finalize();
           }
         } else {
+          // Log more details about why parsing failed
           console.debug('[AISStream] Received message without valid MMSI:', {
-            hasMeta: !!parsed?.MetaData,
-            hasPosition: !!parsed?.PositionReport,
-            messageType: parsed?.MessageType,
+            hasMeta: !!parsed?.MetaData || !!parsed?.metadata,
+            hasPosition: !!parsed?.PositionReport || !!parsed?.ClassAPositionReport,
+            hasMessage: !!parsed?.Message,
+            messageType: parsed?.MessageType || parsed?.messageType,
+            messageKeys: Object.keys(parsed),
+            rawMessagePreview: rawMessage.substring(0, 200),
           });
         }
       } catch (err) {
@@ -130,7 +185,7 @@ async function streamPositions({ boundingBoxes, shipMMSI, timeoutMs = 2000, maxM
         console.warn('[AISStream] Parse error:', {
           error: err.message,
           dataLength: data.toString().length,
-          dataPreview: data.toString().substring(0, 100),
+          dataPreview: data.toString().substring(0, 200),
         });
       }
     });
@@ -140,7 +195,9 @@ async function streamPositions({ boundingBoxes, shipMMSI, timeoutMs = 2000, maxM
         error: err.message,
         code: err.code,
         apiKeyPresent: !!apiKey,
+        apiKeyLength: apiKey?.length || 0,
         wsUrl: WS_URL,
+        payloadPreview: JSON.stringify(payload).substring(0, 200),
       });
       clearTimeout(timer);
       if (!settled) {
@@ -150,12 +207,23 @@ async function streamPositions({ boundingBoxes, shipMMSI, timeoutMs = 2000, maxM
     });
 
     ws.on('close', (code, reason) => {
+      const reasonStr = reason?.toString() || '';
       console.log('[AISStream] WebSocket closed:', {
         code,
-        reason: reason?.toString(),
+        reason: reasonStr,
         resultsCount: results.size,
         settled,
+        receivedMmsis: Array.from(results.keys()),
+        // Code 1006 = abnormal closure (no close frame received)
+        // This often means connection was terminated unexpectedly
+        isAbnormalClosure: code === 1006,
       });
+      
+      // If we got an abnormal closure and no results, it might be an API key issue
+      if (code === 1006 && results.size === 0 && !settled) {
+        console.warn('[AISStream] Abnormal closure with no results - possible API key or subscription issue');
+      }
+      
       clearTimeout(timer);
       finalize();
     });
