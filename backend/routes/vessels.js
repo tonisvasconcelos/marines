@@ -127,7 +127,13 @@ router.post('/', async (req, res) => {
           }
         }
       } catch (error) {
-        console.warn('Failed to fetch initial position from AISStream for new vessel:', error.message);
+        console.error('[Vessel Creation] Failed to fetch initial position from AISStream:', {
+          mmsi,
+          vesselId: newVessel.id,
+          error: error.message,
+          errorType: error.constructor.name,
+          apiKeyConfigured: !!process.env.AISSTREAM_API_KEY,
+        });
         // Continue without AIS position - vessel creation succeeds regardless
       }
     } else if (imo) {
@@ -251,7 +257,13 @@ router.get('/:id/position', async (req, res) => {
           return;
         }
       } catch (error) {
-        console.warn(`Failed to fetch vessel position from AISStream:`, error.message);
+        console.error('[Vessel Position] Failed to fetch position from AISStream:', {
+          vesselId: id,
+          mmsi: vessel.mmsi,
+          error: error.message,
+          errorType: error.constructor.name,
+          apiKeyConfigured: !!process.env.AISSTREAM_API_KEY,
+        });
         // Fall through to fallback options
       }
     } else {

@@ -125,10 +125,46 @@ export async function fetchVesselsInZone(bounds, { timeoutMs = 2000, max = 150 }
   return streamPositions({ boundingBoxes, timeoutMs, maxMessages: max });
 }
 
-export async function fetchLatestPositionByMmsi(mmsi, { timeoutMs = 2000 } = {}) {
-  const boundingBoxes = [[[-90, -180], [90, 180]]];
-  const results = await streamPositions({ boundingBoxes, shipMMSI: [mmsi], timeoutMs, maxMessages: 5 });
-  return results.find((r) => r.mmsi === mmsi) || null;
+export async function fetchLatestPositionByMmsi(mmsi, { timeoutMs = 5000 } = {}) {
+  // Check API key before attempting connection
+  if (!API_KEY) {
+    console.error('[AISStream] AISSTREAM_API_KEY is not set - cannot fetch position for MMSI:', mmsi);
+    throw new Error('AISSTREAM_API_KEY is not configured');
+  }
+  
+  console.log('[AISStream] Fetching position for MMSI:', mmsi, {
+    apiKeyPresent: !!API_KEY,
+    apiKeyLength: API_KEY?.length || 0,
+    timeoutMs,
+  });
+  
+  try {
+    const boundingBoxes = [[[-90, -180], [90, 180]]];
+    const results = await streamPositions({ boundingBoxes, shipMMSI: [mmsi], timeoutMs, maxMessages: 5 });
+    const position = results.find((r) => r.mmsi === mmsi) || null;
+    
+    if (position) {
+      console.log('[AISStream] Successfully fetched position for MMSI:', mmsi, {
+        lat: position.lat,
+        lon: position.lon,
+        timestamp: position.timestamp,
+      });
+    } else {
+      console.warn('[AISStream] No position data found for MMSI:', mmsi, {
+        resultsCount: results.length,
+        receivedMmsis: results.map(r => r.mmsi),
+      });
+    }
+    
+    return position;
+  } catch (error) {
+    console.error('[AISStream] Error fetching position for MMSI:', mmsi, {
+      error: error.message,
+      errorType: error.constructor.name,
+      apiKeyPresent: !!API_KEY,
+    });
+    throw error;
+  }
 }
 
 export async function fetchTrackByMmsi(mmsi, { timeoutMs = 2000, max = 100 } = {}) {
