@@ -48,11 +48,23 @@ router.get('/users', requireRole('ADMIN'), (req, res) => {
 
 router.get('/ais', (req, res) => {
   const wsUrl = process.env.AISSTREAM_WS_URL || 'wss://stream.aisstream.io/v0/stream';
+  const apiKeyValue = process.env.AISSTREAM_API_KEY;
+  const apiKeyPresent = !!apiKeyValue;
+  
+  // Debug logging to diagnose API key detection issues
+  console.log('[settings/ais] API Key Check:', {
+    apiKeyPresent,
+    apiKeyLength: apiKeyValue?.length || 0,
+    apiKeyType: typeof apiKeyValue,
+    apiKeyFirstChars: apiKeyValue ? `${apiKeyValue.substring(0, 5)}...` : 'null/undefined',
+    allAisEnvKeys: Object.keys(process.env).filter(k => k.includes('AIS')),
+  });
+  
   // AISStream only supports MMSI, not IMO
   // This configuration allows future AIS providers to support IMO or both
   res.json({
     provider: 'aisstream',
-    apiKeyPresent: !!process.env.AISSTREAM_API_KEY,
+    apiKeyPresent,
     wsUrl,
     supportedIdentifiers: ['MMSI'], // AISStream only supports MMSI
   });

@@ -314,14 +314,26 @@ export function VesselLayer({ map, vessels, tenantVessels = [], onVesselClick, o
     // Cleanup
     return () => {
       // CRITICAL: Check if map exists and is still valid before cleanup
-      if (!map || !map.isStyleLoaded || typeof map.getLayer !== 'function') {
+      if (!map) {
+        return;
+      }
+      
+      // Check if map methods are available (map might be destroyed or in invalid state)
+      if (typeof map.getLayer !== 'function' || typeof map.removeLayer !== 'function') {
         return;
       }
       
       try {
-        if (map.getLayer(layerId)) map.removeLayer(layerId);
-        if (map.getLayer(clusterLayerId)) map.removeLayer(clusterLayerId);
-        if (map.getLayer(clusterCountLayerId)) map.removeLayer(clusterCountLayerId);
+        // Check each layer exists before trying to remove it
+        if (map.getLayer && map.getLayer(layerId)) {
+          map.removeLayer(layerId);
+        }
+        if (map.getLayer && map.getLayer(clusterLayerId)) {
+          map.removeLayer(clusterLayerId);
+        }
+        if (map.getLayer && map.getLayer(clusterCountLayerId)) {
+          map.removeLayer(clusterCountLayerId);
+        }
         if (map.getSource && map.getSource(sourceId)) map.removeSource(sourceId);
       } catch (error) {
         // Map might be destroyed, ignore cleanup errors

@@ -114,12 +114,16 @@ router.get('/active-vessels', async (req, res) => {
   
   // Log AIS configuration status (always log, not just in dev)
   // Note: AISStream is configured via environment variables (AISSTREAM_API_KEY)
-  const hasAisStreamKey = !!process.env.AISSTREAM_API_KEY;
+  const apiKeyValue = process.env.AISSTREAM_API_KEY;
+  const hasAisStreamKey = !!apiKeyValue;
   console.log('[dashboard/active-vessels] AIS Configuration:', {
     tenantId,
     provider: 'aisstream',
     hasApiKey: hasAisStreamKey,
-    apiKeyConfigured: hasAisStreamKey,
+    apiKeyLength: apiKeyValue?.length || 0,
+    apiKeyType: typeof apiKeyValue,
+    apiKeyFirstChars: apiKeyValue ? `${apiKeyValue.substring(0, 5)}...` : 'null/undefined',
+    allEnvKeys: Object.keys(process.env).filter(k => k.includes('AIS')),
   });
   
   // Normalize provider name (case-insensitive check)
