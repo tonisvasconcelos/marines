@@ -88,6 +88,7 @@ function Dashboard() {
           <div className={styles.mapWidgetContainer}>
             <DashboardMapWidget
               vessels={filteredVessels}
+              tenantVessels={filteredVessels} // Pass tenant vessels for highlighting
               onVesselClick={handleVesselClick}
               onExpand={() => setIsMapFullscreen(true)}
             />
@@ -112,6 +113,7 @@ function Dashboard() {
       {isMapFullscreen && (
         <FullscreenMapModal
           vessels={filteredVessels}
+          tenantVessels={filteredVessels} // Pass tenant vessels for highlighting
           onVesselClick={handleVesselClick}
           onClose={() => setIsMapFullscreen(false)}
         />

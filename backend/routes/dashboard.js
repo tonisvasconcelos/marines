@@ -1,9 +1,9 @@
 import express from 'express';
 import { getMockPortCalls, getMockVessels, getMockAisPosition, getMockOpsSites } from '../data/mockData.js';
-import * as myshiptracking from '../services/myshiptracking.js';
 import { getAisConfig } from '../services/aisConfig.js';
 import * as vesselDb from '../db/vessels.js';
 import * as operationLogsDb from '../db/operationLogs.js';
+import { fetchLatestPositionByMmsi } from '../services/aisstream.js';
 
 const router = express.Router();
 
@@ -113,26 +113,17 @@ router.get('/active-vessels', async (req, res) => {
   const aisConfig = getAisConfig(tenantId);
   
   // Log AIS configuration status (always log, not just in dev)
+  // Note: AISStream is configured via environment variables (AISSTREAM_API_KEY)
+  const hasAisStreamKey = !!process.env.AISSTREAM_API_KEY;
   console.log('[dashboard/active-vessels] AIS Configuration:', {
     tenantId,
-    hasConfig: !!aisConfig,
-    provider: aisConfig?.provider,
-    providerType: typeof aisConfig?.provider,
-    providerMatches: aisConfig?.provider === 'myshiptracking',
-    hasApiKey: !!aisConfig?.apiKey,
-    apiKeyLength: aisConfig?.apiKey?.length || 0,
-    hasSecretKey: !!aisConfig?.secretKey,
-    secretKeyLength: aisConfig?.secretKey?.length || 0,
-    fullConfig: aisConfig ? Object.keys(aisConfig) : null,
+    provider: 'aisstream',
+    hasApiKey: hasAisStreamKey,
+    apiKeyConfigured: hasAisStreamKey,
   });
   
   // Normalize provider name (case-insensitive check)
-  const isMyShipTrackingConfigured = aisConfig?.provider && 
-    (aisConfig.provider.toLowerCase() === 'myshiptracking' || 
-     aisConfig.provider.toLowerCase() === 'my-ship-tracking' ||
-     aisConfig.provider === 'myshiptracking');
-  
-  // Helper function to get AIS position (tries stored position first, then real API, then mock)
+  // Helper function to get AIS position (tries stored position first, then AISStream, then mock)
   const getVesselPosition = async (vessel) => {
     // FIRST: Try to get latest stored position from database
     try {
@@ -155,122 +146,49 @@ router.get('/active-vessels', async (req, res) => {
       // Continue to try AIS API
     }
     
-    // SECOND: Try real AIS API if configured (use normalized check)
-    if (isMyShipTrackingConfigured && aisConfig?.apiKey && aisConfig.apiKey.trim() !== '') {
-      console.log(`[getVesselPosition] Attempting to fetch real AIS data for vessel ${vessel.id} (${vessel.name})`, {
-        hasMmsi: !!vessel.mmsi,
-        hasImo: !!vessel.imo,
-        mmsi: vessel.mmsi,
-        imo: vessel.imo,
-      });
+    // SECOND: Try AISStream (now the default provider)
+    if (vessel.mmsi) {
       try {
-        let position = null;
+        console.log(`[getVesselPosition] Attempting to fetch AIS data from AISStream for vessel ${vessel.id} (${vessel.name})`, {
+          mmsi: vessel.mmsi,
+        });
         
-        if (vessel.mmsi) {
-          console.log(`[getVesselPosition] Fetching position by MMSI: ${vessel.mmsi}`);
-          position = await myshiptracking.getVesselPosition(
-            vessel.mmsi,
-            aisConfig.apiKey,
-            aisConfig.secretKey
-          );
-          console.log(`[getVesselPosition] MyShipTracking API response (MMSI):`, {
-            hasPosition: !!position,
-            hasLat: !!(position?.latitude || position?.lat),
-            hasLon: !!(position?.longitude || position?.lon),
-          });
-        } else if (vessel.imo) {
-          // Remove 'IMO' prefix if present
-          const imoNumber = vessel.imo.replace(/^IMO/i, '').trim();
-          console.log(`[getVesselPosition] Fetching position by IMO: ${imoNumber}`);
-          position = await myshiptracking.getVesselByImo(
-            imoNumber,
-            aisConfig.apiKey,
-            aisConfig.secretKey
-          );
-          console.log(`[getVesselPosition] MyShipTracking API response (IMO):`, {
-            hasPosition: !!position,
-            hasLat: !!(position?.latitude || position?.lat),
-            hasLon: !!(position?.longitude || position?.lon),
-          });
-        } else {
-          console.warn(`[getVesselPosition] Vessel ${vessel.id} (${vessel.name}) has no MMSI or IMO - cannot query AIS API`);
-        }
+        const position = await fetchLatestPositionByMmsi(String(vessel.mmsi));
         
-        if (position && (position.latitude || position.lat)) {
-          // Extract coordinates - handle various MyShipTracking API response formats
-          // API might return: { latitude, longitude } or { lat, lon } or nested structures
-          let lat = position.latitude ?? position.lat ?? null;
-          let lon = position.longitude ?? position.lon ?? null;
+        if (position && position.lat !== undefined && position.lon !== undefined) {
+          const positionData = {
+            lat: position.lat,
+            lon: position.lon,
+            timestamp: position.timestamp || new Date().toISOString(),
+            sog: position.sog,
+            cog: position.cog,
+            heading: position.heading,
+            navStatus: position.navStatus,
+            source: 'aisstream',
+          };
           
-          // Handle nested position object (if API returns { position: { lat, lon } })
-          if ((lat === null || lon === null) && position.position) {
-            lat = position.position.latitude ?? position.position.lat ?? lat;
-            lon = position.position.longitude ?? position.position.lon ?? lon;
+          // Store position in history for future use
+          try {
+            await vesselDb.storePositionHistory(vessel.id, tenantId, positionData);
+          } catch (error) {
+            console.warn('Failed to store position history:', error.message);
+            // Don't fail if storage fails
           }
           
-          // Convert to numbers if strings
-          if (typeof lat === 'string') lat = parseFloat(lat);
-          if (typeof lon === 'string') lon = parseFloat(lon);
-          
-          // Validate coordinates are valid numbers
-          if (lat !== null && lon !== null && isFinite(lat) && isFinite(lon)) {
-            // CRITICAL: Ensure coordinates are in correct order (lat, lon)
-            // MyShipTracking API should return latitude/longitude in correct order
-            // But we validate to prevent any coordinate swapping issues
-            
-            // Transform MyShipTracking response to our format (normalize coordinates)
-            const positionData = {
-              lat: lat,  // CRITICAL: Use extracted lat (not swapped)
-              lon: lon,  // CRITICAL: Use extracted lon (not swapped)
-              timestamp: position.timestamp || position.last_position_time || new Date().toISOString(),
-              sog: position.speed || position.sog,
-              cog: position.course || position.cog,
-              heading: position.heading,
-              navStatus: position.nav_status || position.status,
-              source: 'myshiptracking',
-            };
-            
-            // Log in development for debugging
-            if (process.env.NODE_ENV !== 'production') {
-              console.log('[getVesselPosition] MyShipTracking API response transformed:', {
-                vesselId: vessel.id,
-                vesselName: vessel.name,
-                rawApiResponse: {
-                  latitude: position.latitude,
-                  longitude: position.longitude,
-                  lat: position.lat,
-                  lon: position.lon,
-                },
-                transformed: positionData,
-              });
-            }
-            
-            return positionData;
-          } else {
-            console.warn(`[getVesselPosition] Invalid coordinates from MyShipTracking for vessel ${vessel.id}:`, {
-              lat,
-              lon,
-              position,
-            });
-          }
+          return positionData;
         }
       } catch (error) {
-        console.error(`[getVesselPosition] MyShipTracking API error for vessel ${vessel.id} (${vessel.name}):`, {
+        console.warn(`[getVesselPosition] AISStream API error for vessel ${vessel.id} (${vessel.name}):`, {
           error: error.message,
-          stack: error.stack,
-          vesselMmsi: vessel.mmsi,
-          vesselImo: vessel.imo,
+          mmsi: vessel.mmsi,
         });
         // Fall through to mock data
       }
     } else {
-      // AIS API not configured
-      if (process.env.NODE_ENV !== 'production') {
-        console.log(`[getVesselPosition] AIS API not configured for tenant ${tenantId}, using mock data for vessel ${vessel.id}`);
-      }
+      console.warn(`[getVesselPosition] Vessel ${vessel.id} (${vessel.name}) has no MMSI - cannot query AISStream (MMSI required)`);
     }
     
-    // Fallback to mock data (only if AIS API not configured, failed, or returned no data)
+    // Fallback to mock data (only if AIS API failed or returned no data)
     const mockPos = getMockAisPosition(vessel.id);
     const mockPositionData = {
       lat: mockPos.lat,
@@ -287,9 +205,7 @@ router.get('/active-vessels', async (req, res) => {
       console.log(`[getVesselPosition] Using mock position for vessel ${vessel.id} (${vessel.name}):`, {
         source: 'mock',
         position: mockPositionData,
-        reason: isMyShipTrackingConfigured && aisConfig?.apiKey && aisConfig.apiKey.trim() !== ''
-          ? 'AIS API failed or returned no data' 
-          : 'AIS API not configured',
+        reason: vessel.mmsi ? 'AISStream API failed or returned no data' : 'Vessel has no MMSI',
       });
     }
     
@@ -341,20 +257,29 @@ router.get('/active-vessels', async (req, res) => {
       }
       
       // Detect status change and log it
+      // Only create log if vessel exists in database (skip for mock vessels)
       if (position && previousStatus && previousStatus !== status) {
         try {
-          await operationLogsDb.createOperationLog({
-            tenantId,
-            vesselId: vessel.id,
-            eventType: 'STATUS_CHANGE',
-            description: `Vessel status changed from ${previousStatus} to ${status}`,
-            positionLat: position.lat,
-            positionLon: position.lon,
-            previousStatus,
-            currentStatus: status,
-          });
+          // Check if vessel exists in database before creating log
+          const vesselExists = await vesselDb.getVesselById(vessel.id, tenantId);
+          if (vesselExists) {
+            await operationLogsDb.createOperationLog({
+              tenantId,
+              vesselId: vessel.id,
+              eventType: 'STATUS_CHANGE',
+              description: `Vessel status changed from ${previousStatus} to ${status}`,
+              positionLat: position.lat,
+              positionLon: position.lon,
+              previousStatus,
+              currentStatus: status,
+            });
+          }
         } catch (logError) {
-          console.error('Failed to create operation log for status change:', logError);
+          // Silently skip logging for mock vessels or database errors
+          // Foreign key errors are expected for mock vessels that don't exist in DB
+          if (!logError.message?.includes('foreign key constraint')) {
+            console.error('Failed to create operation log for status change:', logError);
+          }
         }
       }
       
@@ -401,18 +326,27 @@ router.get('/active-vessels', async (req, res) => {
       }
       
       // Create operation log for geofence entry
+      // Only create log if vessel exists in database (skip for mock vessels)
       if (isInside) {
         try {
-          await operationLogsDb.createOperationLog({
-            tenantId,
-            vesselId: vessel.id,
-            eventType: 'GEOFENCE_ENTRY',
-            description: `${vessel.name} entered ${site.name} (${site.type})`,
-            positionLat: vessel.position.lat,
-            positionLon: vessel.position.lon,
-          });
+          // Check if vessel exists in database before creating log
+          const vesselExists = await vesselDb.getVesselById(vessel.id, tenantId);
+          if (vesselExists) {
+            await operationLogsDb.createOperationLog({
+              tenantId,
+              vesselId: vessel.id,
+              eventType: 'GEOFENCE_ENTRY',
+              description: `${vessel.name} entered ${site.name} (${site.type})`,
+              positionLat: vessel.position.lat,
+              positionLon: vessel.position.lon,
+            });
+          }
         } catch (logError) {
-          console.error('Failed to create operation log for geofence entry:', logError);
+          // Silently skip logging for mock vessels or database errors
+          // Foreign key errors are expected for mock vessels that don't exist in DB
+          if (!logError.message?.includes('foreign key constraint')) {
+            console.error('Failed to create operation log for geofence entry:', logError);
+          }
         }
       }
     }

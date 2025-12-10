@@ -14,6 +14,35 @@
  */
 
 const MYSHIPTRACKING_BASE_URL = 'https://api.myshiptracking.com';
+const CACHE_TTL_MS = parseInt(process.env.AIS_CACHE_TTL_MS || '60000', 10);
+const MIN_INTERVAL_MS = parseInt(process.env.AIS_MIN_INTERVAL_MS || '200', 10);
+const MAX_RETRIES = 2;
+
+const cache = new Map(); // key -> { expiresAt, data }
+let lastRequestAt = 0;
+
+async function throttleRequests() {
+  const now = Date.now();
+  const wait = Math.max(0, lastRequestAt + MIN_INTERVAL_MS - now);
+  if (wait > 0) {
+    await new Promise((resolve) => setTimeout(resolve, wait));
+  }
+  lastRequestAt = Date.now();
+}
+
+function getCache(key) {
+  const entry = cache.get(key);
+  if (!entry) return null;
+  if (entry.expiresAt < Date.now()) {
+    cache.delete(key);
+    return null;
+  }
+  return entry.data;
+}
+
+function setCache(key, data) {
+  cache.set(key, { data, expiresAt: Date.now() + CACHE_TTL_MS });
+}
 
 /**
  * Make authenticated request to MyShipTracking API
@@ -34,36 +63,53 @@ async function makeRequest(endpoint, apiKey, secretKey, params = {}) {
     }
   });
 
-  try {
-    const response = await fetch(url.toString(), {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-      },
-    });
+  const cacheKey = url.toString();
+  const cached = getCache(cacheKey);
+  if (cached) {
+    return cached;
+  }
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      const errorMessage = `MyShipTracking API error: ${response.status} - ${errorText}`;
-      console.error(errorMessage);
-      console.error('Request URL:', url.toString().replace(/apikey=[^&]+/, 'apikey=***').replace(/secret=[^&]+/, 'secret=***'));
-      throw new Error(errorMessage);
+  let attempt = 0;
+  while (attempt <= MAX_RETRIES) {
+    try {
+      await throttleRequests();
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        const errorMessage = `MyShipTracking API error: ${response.status} - ${errorText}`;
+        console.error(errorMessage);
+        console.error('Request URL:', url.toString().replace(/apikey=[^&]+/, 'apikey=***').replace(/secret=[^&]+/, 'secret=***'));
+        throw new Error(errorMessage);
+      }
+
+      const data = await response.json();
+      console.log('MyShipTracking API response received:', {
+        endpoint,
+        hasData: !!data,
+        dataKeys: data ? Object.keys(data) : [],
+      });
+      setCache(cacheKey, data);
+      return data;
+    } catch (error) {
+      attempt += 1;
+      const delay = Math.pow(2, attempt) * 200;
+      console.error('MyShipTracking API request failed:', {
+        attempt,
+        endpoint,
+        error: error.message,
+        url: url.toString().replace(/apikey=[^&]+/, 'apikey=***').replace(/secret=[^&]+/, 'secret=***'),
+      });
+      if (attempt > MAX_RETRIES) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
-
-    const data = await response.json();
-    console.log('MyShipTracking API response received:', {
-      endpoint,
-      hasData: !!data,
-      dataKeys: data ? Object.keys(data) : [],
-    });
-    return data;
-  } catch (error) {
-    console.error('MyShipTracking API request failed:', {
-      endpoint,
-      error: error.message,
-      url: url.toString().replace(/apikey=[^&]+/, 'apikey=***').replace(/secret=[^&]+/, 'secret=***'),
-    });
-    throw error;
   }
 }
 

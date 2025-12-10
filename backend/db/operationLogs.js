@@ -62,13 +62,20 @@ export async function createOperationLog({
 
     return { id: logId, timestamp };
   } catch (error) {
-    console.error('Error creating operation log in database:', error);
-    // Don't throw - operation logs are non-critical
-    // Return a mock log ID for consistency
-    return { 
-      id: `log-${Date.now()}-mock`, 
-      timestamp: new Date().toISOString() 
-    };
+    // Handle foreign key constraint errors silently (expected for mock vessels)
+    const isForeignKeyError = error.code === '23503' || 
+                              error.message?.includes('foreign key constraint') ||
+                              error.message?.includes('violates foreign key constraint');
+    
+    if (isForeignKeyError) {
+      // Silently skip - vessel doesn't exist in database (likely mock data)
+      return null;
+    }
+    
+    // Log other errors but don't throw - operation logs are non-critical
+    console.error('Error creating operation log in database:', error.message);
+    // Return null to indicate log was not created
+    return null;
   }
 }
 

@@ -1,3 +1,63 @@
+-- Tenants Table
+CREATE TABLE IF NOT EXISTS tenants (
+  id VARCHAR(255) PRIMARY KEY,
+  name TEXT NOT NULL,
+  slug TEXT UNIQUE NOT NULL,
+  default_locale VARCHAR(10) DEFAULT 'en-US',
+  default_country_code VARCHAR(5) DEFAULT 'BR',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Users Table
+CREATE TABLE IF NOT EXISTS users (
+  id VARCHAR(255) PRIMARY KEY,
+  tenant_id VARCHAR(255) NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  email TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  name TEXT NOT NULL,
+  role VARCHAR(50) NOT NULL DEFAULT 'USER',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_users_tenant_id ON users(tenant_id);
+
+-- Refresh Tokens (server-issued)
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+  id VARCHAR(255) PRIMARY KEY,
+  tenant_id VARCHAR(255) NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  expires_at TIMESTAMP NOT NULL,
+  revoked_at TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
+
+-- Customers Table
+CREATE TABLE IF NOT EXISTS customers (
+  id VARCHAR(255) PRIMARY KEY,
+  tenant_id VARCHAR(255) NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  contact_email TEXT,
+  contact_phone TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_customers_tenant_id ON customers(tenant_id);
+
+-- Suppliers Table
+CREATE TABLE IF NOT EXISTS suppliers (
+  id VARCHAR(255) PRIMARY KEY,
+  tenant_id VARCHAR(255) NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  contact_email TEXT,
+  contact_phone TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_suppliers_tenant_id ON suppliers(tenant_id);
+
 -- Vessels Table
 -- Stores vessel information with multi-tenant support
 CREATE TABLE IF NOT EXISTS vessels (
@@ -102,4 +162,64 @@ CREATE INDEX IF NOT EXISTS idx_operation_logs_tenant_id ON portcall_operation_lo
 CREATE INDEX IF NOT EXISTS idx_operation_logs_vessel_id ON portcall_operation_logs(vessel_id);
 CREATE INDEX IF NOT EXISTS idx_operation_logs_event_type ON portcall_operation_logs(event_type);
 CREATE INDEX IF NOT EXISTS idx_operation_logs_timestamp ON portcall_operation_logs(timestamp DESC);
+
+-- Port Calls Table
+CREATE TABLE IF NOT EXISTS port_calls (
+  id VARCHAR(255) PRIMARY KEY,
+  tenant_id VARCHAR(255) NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  vessel_id VARCHAR(255) REFERENCES vessels(id) ON DELETE SET NULL,
+  port_id VARCHAR(255),
+  status VARCHAR(50) NOT NULL,
+  eta TIMESTAMP,
+  etd TIMESTAMP,
+  local_reference_type VARCHAR(50),
+  local_reference_number VARCHAR(100),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_port_calls_tenant_id ON port_calls(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_port_calls_status ON port_calls(status);
+
+-- Invoices Table
+CREATE TABLE IF NOT EXISTS invoices (
+  id VARCHAR(255) PRIMARY KEY,
+  tenant_id VARCHAR(255) NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  port_call_id VARCHAR(255) REFERENCES port_calls(id) ON DELETE SET NULL,
+  customer_id VARCHAR(255) REFERENCES customers(id) ON DELETE SET NULL,
+  total_amount NUMERIC(14,2) DEFAULT 0,
+  currency VARCHAR(10) DEFAULT 'BRL',
+  status VARCHAR(50) DEFAULT 'DRAFT',
+  issued_at TIMESTAMP,
+  due_at TIMESTAMP,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_invoices_tenant_id ON invoices(tenant_id);
+
+-- Purchase Orders Table
+CREATE TABLE IF NOT EXISTS purchase_orders (
+  id VARCHAR(255) PRIMARY KEY,
+  tenant_id VARCHAR(255) NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  supplier_id VARCHAR(255) REFERENCES suppliers(id) ON DELETE SET NULL,
+  port_call_id VARCHAR(255) REFERENCES port_calls(id) ON DELETE SET NULL,
+  total_amount NUMERIC(14,2) DEFAULT 0,
+  currency VARCHAR(10) DEFAULT 'BRL',
+  status VARCHAR(50) DEFAULT 'DRAFT',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_purchase_orders_tenant_id ON purchase_orders(tenant_id);
+
+-- Audit Logs
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id VARCHAR(255) PRIMARY KEY,
+  tenant_id VARCHAR(255) NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  user_id VARCHAR(255),
+  action VARCHAR(100) NOT NULL,
+  entity VARCHAR(100),
+  entity_id VARCHAR(255),
+  metadata JSONB,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_tenant_id ON audit_logs(tenant_id);
 

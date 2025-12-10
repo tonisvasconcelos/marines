@@ -7,7 +7,7 @@ import styles from './FullscreenMapModal.module.css';
  * Fullscreen map modal
  * Shows only the map and vessels in fullscreen mode
  */
-function FullscreenMapModal({ vessels, onVesselClick, onClose }) {
+function FullscreenMapModal({ vessels, tenantVessels, onVesselClick, onClose }) {
   const modalContentRef = useRef(null);
 
   // Prevent body scroll when modal is open
@@ -67,6 +67,7 @@ function FullscreenMapModal({ vessels, onVesselClick, onClose }) {
       <div ref={modalContentRef} className={styles.modalContent}>
         <DashboardMapMapLibre
           vessels={vessels}
+          tenantVessels={tenantVessels}
           geofences={null}
           opsSites={null}
           onVesselClick={onVesselClick}

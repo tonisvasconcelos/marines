@@ -1,7 +1,5 @@
 import express from 'express';
 import { getMockOpsSites, createMockOpsSite, updateMockOpsSite, deleteMockOpsSite } from '../data/mockData.js';
-import { getAisConfig } from '../services/aisConfig.js';
-import * as myshiptracking from '../services/myshiptracking.js';
 
 const router = express.Router();
 
@@ -26,38 +24,10 @@ router.get('/:id/portcalls', async (req, res) => {
     return res.status(404).json({ message: 'Ops site not found' });
   }
   
-  // If site has coordinates, try to get port calls from MyShipTracking
-  const aisConfig = getAisConfig(tenantId);
-  
-  if (
-    aisConfig?.provider === 'myshiptracking' &&
-    aisConfig?.apiKey &&
-    site.latitude != null &&
-    site.longitude != null
-  ) {
-    try {
-      const radius = 50; // Default radius in nautical miles
-      const portCalls = await myshiptracking.getPortCallsByArea(
-        site.latitude,
-        site.longitude,
-        radius,
-        aisConfig.apiKey,
-        aisConfig.secretKey || '',
-        {
-          limit: limit || 100,
-          days: days || 30,
-        }
-      );
-      
-      res.json(portCalls);
-      return;
-    } catch (error) {
-      console.error(`Failed to fetch port calls for ops site ${id}:`, error);
-      // Fall through to empty response or mock data
-    }
-  }
-  
-  // Return empty array if no AIS integration or API call failed
+  // Note: AISStream does not provide port calls API
+  // Port calls are managed internally via the /api/port-calls endpoint
+  // Return empty array - port calls should be fetched from the port-calls endpoint
+  // and filtered by ops site if needed
   res.json([]);
 });
 

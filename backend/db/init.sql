@@ -4,4 +4,6 @@
 -- Or execute via your database client
 
 \i schema.sql
+\i rls_policies.sql
+\i seeds.sql
 

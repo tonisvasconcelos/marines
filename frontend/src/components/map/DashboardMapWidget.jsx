@@ -6,7 +6,7 @@ import styles from './DashboardMapWidget.module.css';
  * Small map widget for dashboard
  * Shows a compact map with an expand button to go fullscreen
  */
-function DashboardMapWidget({ vessels, onVesselClick, onExpand }) {
+function DashboardMapWidget({ vessels, tenantVessels, onVesselClick, onExpand }) {
   return (
     <div className={styles.mapWidget}>
       <div className={styles.mapWidgetHeader}>
@@ -15,6 +15,7 @@ function DashboardMapWidget({ vessels, onVesselClick, onExpand }) {
       <div className={styles.mapWidgetContent}>
         <DashboardMapMapLibre
           vessels={vessels}
+          tenantVessels={tenantVessels}
           geofences={null}
           opsSites={null}
           onVesselClick={onVesselClick}

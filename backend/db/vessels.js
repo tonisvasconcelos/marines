@@ -123,6 +123,52 @@ export async function getVesselById(vesselId, tenantId) {
 }
 
 /**
+ * Get a vessel by MMSI for a tenant
+ * SECURITY: Verifies vessel belongs to the specified tenant
+ */
+export async function getVesselByMmsi(mmsi, tenantId) {
+  validateTenantId(tenantId, 'getVesselByMmsi');
+  
+  if (!mmsi) {
+    return null;
+  }
+  
+  try {
+    // CRITICAL: Always filter by both mmsi AND tenant_id to prevent cross-tenant access
+    const result = await query(
+      'SELECT * FROM vessels WHERE mmsi = $1 AND tenant_id = $2',
+      [String(mmsi), tenantId]
+    );
+    if (result.rows.length === 0) return null;
+    const row = result.rows[0];
+    // Transform database column names to camelCase
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      name: row.name,
+      imo: row.imo,
+      mmsi: row.mmsi,
+      callSign: row.call_sign,
+      flag: row.flag,
+      type: row.type,
+      length: row.length,
+      width: row.width,
+      draft: row.draft,
+      grossTonnage: row.gross_tonnage,
+      netTonnage: row.net_tonnage,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  } catch (error) {
+    console.error('Error fetching vessel by MMSI from database:', error);
+    // Fallback to mock data
+    const { getMockVessels } = await import('../data/mockData.js');
+    const vessels = getMockVessels(tenantId);
+    return vessels.find(v => v.mmsi === String(mmsi)) || null;
+  }
+}
+
+/**
  * Create a new vessel
  * SECURITY: Ensures vessel is created with the correct tenant_id
  */

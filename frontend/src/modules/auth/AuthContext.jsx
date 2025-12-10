@@ -8,6 +8,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [tenant, setTenant] = useState(null);
   const [token, setToken] = useState(null);
+  const [refreshToken, setRefreshToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -15,12 +16,16 @@ export function AuthProvider({ children }) {
     const storedToken = localStorage.getItem('auth_token');
     const storedUser = localStorage.getItem('auth_user');
     const storedTenant = localStorage.getItem('auth_tenant');
+    const storedRefresh = localStorage.getItem('auth_refresh');
 
     if (storedToken && storedUser && storedTenant) {
       const tenantData = JSON.parse(storedTenant);
       setToken(storedToken);
       setUser(JSON.parse(storedUser));
       setTenant(tenantData);
+      if (storedRefresh) {
+        setRefreshToken(storedRefresh);
+      }
       
       // Set locale from tenant settings
       if (tenantData.defaultLocale) {
@@ -42,15 +47,21 @@ export function AuthProvider({ children }) {
         hasTenant: !!data.tenant 
       });
 
-      const { token: newToken, user: newUser, tenant: newTenant } = data;
+      const { token: newToken, refreshToken: newRefresh, user: newUser, tenant: newTenant } = data;
 
+      // Accept logins even if refreshToken is not provided by the backend
       if (!newToken || !newUser || !newTenant) {
-        console.error('Missing data in response:', { newToken: !!newToken, newUser: !!newUser, newTenant: !!newTenant });
+        console.error('Missing data in response:', { newToken: !!newToken, newRefresh: !!newRefresh, newUser: !!newUser, newTenant: !!newTenant });
         throw new Error('Invalid response from server');
       }
 
       // Update localStorage first
       localStorage.setItem('auth_token', newToken);
+      if (newRefresh) {
+        localStorage.setItem('auth_refresh', newRefresh);
+      } else {
+        localStorage.removeItem('auth_refresh');
+      }
       localStorage.setItem('auth_user', JSON.stringify(newUser));
       localStorage.setItem('auth_tenant', JSON.stringify(newTenant));
 
@@ -61,6 +72,7 @@ export function AuthProvider({ children }) {
 
       // Then update state (this triggers re-render)
       setToken(newToken);
+      setRefreshToken(newRefresh || null);
       setUser(newUser);
       setTenant(newTenant);
 
@@ -92,10 +104,15 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
+    if (refreshToken) {
+      api.post('/auth/logout', { refreshToken }).catch(() => {});
+    }
     setToken(null);
     setUser(null);
     setTenant(null);
+    setRefreshToken(null);
     localStorage.removeItem('auth_token');
+    localStorage.removeItem('auth_refresh');
     localStorage.removeItem('auth_user');
     localStorage.removeItem('auth_tenant');
   };
@@ -104,11 +121,13 @@ export function AuthProvider({ children }) {
     user,
     tenant,
     token,
+    refreshToken,
     loading,
     login,
     logout,
     setTenant,
     isAuthenticated: !!token,
+    hasRole: (...roles) => (user?.role ? roles.includes(user.role) : false),
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

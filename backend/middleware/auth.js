@@ -26,7 +26,7 @@ export function authenticateToken(req, res, next) {
     // SECURITY: Validate tenantId is present in token
     if (!decoded.tenantId || typeof decoded.tenantId !== 'string') {
       console.error('Invalid token: missing or invalid tenantId', { decoded });
-      return res.status(403).json({ message: 'Invalid token: tenant information missing' });
+      return res.status(401).json({ message: 'Invalid token: tenant information missing' });
     }
     
     req.user = decoded;
@@ -37,8 +37,29 @@ export function authenticateToken(req, res, next) {
     
     next();
   } catch (error) {
-    console.error('Token verification failed:', error.message);
-    return res.status(403).json({ message: 'Invalid or expired token' });
+    // All JWT verification errors are authentication failures (expired, invalid, malformed)
+    // Return 401 so clients can attempt token refresh
+    const isExpired = error.name === 'TokenExpiredError';
+    console.error('Token verification failed:', error.message, { expired: isExpired });
+    return res.status(401).json({ 
+      message: isExpired ? 'Token expired' : 'Invalid token' 
+    });
   }
+}
+
+/**
+ * Role-based authorization middleware
+ * @param  {...string} roles Allowed roles
+ */
+export function requireRole(...roles) {
+  return (req, res, next) => {
+    if (!req.user?.role) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    if (roles.length && !roles.includes(req.user.role)) {
+      return res.status(403).json({ message: 'Insufficient permissions' });
+    }
+    return next();
+  };
 }
 

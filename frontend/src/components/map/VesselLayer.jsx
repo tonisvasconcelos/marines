@@ -37,10 +37,28 @@ function getVesselTypeColor(vesselType, status) {
 /**
  * VesselLayer Component
  * Manages vessel rendering with clustering on MapLibre
+ * @param {Object} props
+ * @param {Object} props.map - MapLibre map instance
+ * @param {Array} props.vessels - Array of vessels to render
+ * @param {Array} props.tenantVessels - Array of tenant vessel IDs or MMSIs for highlighting
+ * @param {Function} props.onVesselClick - Callback when vessel is clicked
+ * @param {Function} props.onVesselHover - Callback when vessel is hovered
  */
-export function VesselLayer({ map, vessels, onVesselClick, onVesselHover }) {
+export function VesselLayer({ map, vessels, tenantVessels = [], onVesselClick, onVesselHover }) {
   const markersRef = useRef({});
   const popupRef = useRef(null);
+
+  // Create a Set of tenant vessel identifiers (MMSI or ID) for quick lookup
+  const tenantVesselSet = useMemo(() => {
+    if (!tenantVessels || !Array.isArray(tenantVessels)) return new Set();
+    return new Set(
+      tenantVessels.map(v => {
+        // Handle both vessel objects and simple IDs/MMSIs
+        if (typeof v === 'string') return v;
+        return v.mmsi || v.id || v;
+      }).filter(Boolean)
+    );
+  }, [tenantVessels]);
 
   // Prepare vessel GeoJSON data with full-precision coordinates
   const vesselGeoJSON = useMemo(() => {
@@ -53,11 +71,15 @@ export function VesselLayer({ map, vessels, onVesselClick, onVesselHover }) {
 
     const features = vessels
       .map((vessel) => {
-        if (!vessel || !vessel.position) return null;
+        // Handle both vessel.position structure and direct lat/lon structure (from zone API)
+        const positionData = vessel.position || vessel;
+        if (!vessel || ((!positionData.lat && !positionData.lon) && (!vessel.lat && !vessel.lng))) return null;
 
         // Normalize coordinates (preserves full precision)
+        // Handle both lng and lon for compatibility
         const normalizedPos = normalizeVesselPosition({
-          ...vessel.position,
+          lat: positionData.lat || vessel.lat,
+          lon: positionData.lon || positionData.lng || vessel.lon || vessel.lng,
           vesselName: vessel.name,
         });
 
@@ -67,13 +89,23 @@ export function VesselLayer({ map, vessels, onVesselClick, onVesselHover }) {
         const lat = normalizedPos.lat;
         const lon = normalizedPos.lon;
 
-        // Get vessel properties
-        const cog = vessel.position?.cog ?? vessel.position?.course ?? 0;
-        const heading = vessel.position?.heading ?? cog;
+        // Get vessel properties (handle both position object and direct properties)
+        const cog = positionData.cog ?? positionData.course ?? vessel.course ?? 0;
+        const heading = positionData.heading ?? vessel.heading ?? cog;
         const rotation = cog || heading || 0;
-        const status = vessel.status || 'AT_SEA';
+        const status = vessel.status || positionData.navStatus || positionData.nav_status || 'AT_SEA';
         const vesselType = vessel.type || vessel.ship_type || vessel.vessel_type || '';
-        const color = getVesselTypeColor(vesselType, status);
+        
+        // Check if this is a tenant vessel (match by MMSI or ID)
+        const vesselMmsi = vessel.mmsi || positionData.mmsi;
+        const vesselId = vessel.id;
+        const isTenantVessel = (vesselMmsi && tenantVesselSet.has(String(vesselMmsi))) ||
+                               (vesselId && tenantVesselSet.has(String(vesselId)));
+        
+        // Tenant vessels get colored markers, others get grey
+        const color = isTenantVessel 
+          ? getVesselTypeColor(vesselType, status)
+          : '#94a3b8'; // Grey for non-tenant vessels
 
         return {
           type: 'Feature',
@@ -90,12 +122,13 @@ export function VesselLayer({ map, vessels, onVesselClick, onVesselHover }) {
             rotation,
             cog,
             heading,
-            sog: vessel.position?.sog || vessel.position?.speed || null,
-            navStatus: vessel.position?.navStatus || vessel.position?.status || null,
-            timestamp: vessel.position?.timestamp || null,
-            imo: vessel.imo,
-            mmsi: vessel.mmsi,
+            sog: positionData.sog || positionData.speed || vessel.speed || null,
+            navStatus: positionData.navStatus || positionData.nav_status || vessel.nav_status || null,
+            timestamp: positionData.timestamp || vessel.timestamp || null,
+            imo: vessel.imo || positionData.imo,
+            mmsi: vesselMmsi,
             portCallId: vessel.portCallId,
+            isTenantVessel, // Flag for tenant vessel
             // Store full vessel object for popup
             vesselData: vessel,
           },
@@ -107,7 +140,7 @@ export function VesselLayer({ map, vessels, onVesselClick, onVesselHover }) {
       type: 'FeatureCollection',
       features,
     };
-  }, [vessels]);
+  }, [vessels, tenantVesselSet]);
 
   // Update vessel layer on MapLibre
   useEffect(() => {

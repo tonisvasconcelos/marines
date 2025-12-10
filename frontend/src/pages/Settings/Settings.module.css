@@ -46,6 +46,15 @@
   transition: border-color 0.2s;
 }
 
+.readonlyValue {
+  padding: 12px;
+  border: 1px dashed var(--gray-300);
+  border-radius: var(--radius);
+  background-color: var(--gray-50);
+  color: var(--gray-700);
+  font-size: 14px;
+}
+
 .field input:focus,
 .field select:focus {
   outline: none;

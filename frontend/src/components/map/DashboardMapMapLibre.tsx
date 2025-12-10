@@ -19,7 +19,7 @@ import { getVesselsInZone } from '../../api/myshiptracking';
 import { useQuery } from '@tanstack/react-query';
 import styles from './DashboardMap.module.css';
 
-function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, showControls = true, isDashboardWidget = false }) {
+function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, tenantVessels, showControls = true, isDashboardWidget = false }) {
   const navigate = useNavigate();
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
@@ -397,6 +397,7 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, sho
         <VesselLayer
           map={mapRef.current}
           vessels={zoneVessels || vessels} // Use zone vessels if available, fallback to props
+          tenantVessels={tenantVessels} // Pass tenant vessels for highlighting
           onVesselClick={handleVesselClick}
         />
       )}

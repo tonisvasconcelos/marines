@@ -8,6 +8,11 @@ router.get('/', (req, res) => {
   const { limit, sort, status, vesselId } = req.query;
   
   let portCalls = getMockPortCalls(tenantId);
+  const limitNumber = parseInt(limit, 10);
+  // Validate limit is a positive integer, default to 50 if invalid or negative
+  const parsedLimit = Number.isFinite(limitNumber) && limitNumber > 0 
+    ? Math.min(limitNumber, 200) 
+    : 50;
   
   // Filter by status
   if (status) {
@@ -25,9 +30,7 @@ router.get('/', (req, res) => {
     portCalls.sort((a, b) => new Date(b.eta) - new Date(a.eta));
   }
   
-  if (limit) {
-    portCalls = portCalls.slice(0, parseInt(limit));
-  }
+  portCalls = portCalls.slice(0, parsedLimit);
   
   res.json(portCalls);
 });
