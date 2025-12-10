@@ -64,6 +64,16 @@ async function makeRequest(endpoint, params = {}) {
     return separator === '?' ? '?[AUTH]' : '&[AUTH]';
   });
   
+  // Log full query string parts to verify encoding
+  const queryPartsDebug = queryParts.map(part => {
+    if (part.startsWith('apikey=')) {
+      return `apikey=[REDACTED] (length: ${authParams.apikey.length})`;
+    } else if (part.startsWith('secret=')) {
+      return `secret=[REDACTED] (length: ${authParams.secret.length})`;
+    }
+    return part;
+  });
+  
   console.log('[MyShipTracking] API Request:', {
     endpoint,
     url: debugUrl,
@@ -72,12 +82,15 @@ async function makeRequest(endpoint, params = {}) {
     authParamsKeys: Object.keys(authParams),
     queryStringLength: queryString.length,
     queryStringPreview: queryString.substring(0, 50) + '...',
+    queryParts: queryPartsDebug,
+    apiKeyFirstChars: authParams.apikey.substring(0, 10),
+    apiKeyLastChars: authParams.apikey.substring(authParams.apikey.length - 5),
+    secretFirstChars: authParams.secret.substring(0, 5),
   });
   
   try {
     const response = await fetch(url, { 
       headers: {
-        'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
       method: 'GET',
