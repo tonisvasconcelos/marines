@@ -1,12 +1,19 @@
 import WebSocket from 'ws';
 
 const WS_URL = process.env.AISSTREAM_WS_URL || 'wss://stream.aisstream.io/v0/stream';
-const API_KEY = process.env.AISSTREAM_API_KEY;
+
+// Read API key at runtime, not at module load time
+// This ensures Railway environment variables are available even if injected after module load
+function getApiKey() {
+  return process.env.AISSTREAM_API_KEY;
+}
 
 function requireApiKey() {
-  if (!API_KEY) {
+  const apiKey = getApiKey();
+  if (!apiKey) {
     throw new Error('AISSTREAM_API_KEY is not set');
   }
+  return apiKey;
 }
 
 function normalizePosition(msg) {
@@ -49,10 +56,10 @@ function normalizePosition(msg) {
 }
 
 async function streamPositions({ boundingBoxes, shipMMSI, timeoutMs = 2000, maxMessages = 200 }) {
-  requireApiKey();
+  const apiKey = requireApiKey(); // Get API key at runtime
 
   const payload = {
-    APIKey: API_KEY,
+    APIKey: apiKey,
     BoundingBoxes: boundingBoxes,
     FilterMessageTypes: ['PositionReport', 'ClassAPositionReport', 'StandardClassBCSPositionReport'],
   };
@@ -126,15 +133,20 @@ export async function fetchVesselsInZone(bounds, { timeoutMs = 2000, max = 150 }
 }
 
 export async function fetchLatestPositionByMmsi(mmsi, { timeoutMs = 5000 } = {}) {
-  // Check API key before attempting connection
-  if (!API_KEY) {
-    console.error('[AISStream] AISSTREAM_API_KEY is not set - cannot fetch position for MMSI:', mmsi);
+  // Check API key before attempting connection (read at runtime)
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    console.error('[AISStream] AISSTREAM_API_KEY is not set - cannot fetch position for MMSI:', mmsi, {
+      envVarPresent: 'AISSTREAM_API_KEY' in process.env,
+      envVarValue: process.env.AISSTREAM_API_KEY ? '***' : undefined,
+      allAisEnvKeys: Object.keys(process.env).filter(k => k.includes('AIS')),
+    });
     throw new Error('AISSTREAM_API_KEY is not configured');
   }
   
   console.log('[AISStream] Fetching position for MMSI:', mmsi, {
-    apiKeyPresent: !!API_KEY,
-    apiKeyLength: API_KEY?.length || 0,
+    apiKeyPresent: !!apiKey,
+    apiKeyLength: apiKey?.length || 0,
     timeoutMs,
   });
   
@@ -158,10 +170,13 @@ export async function fetchLatestPositionByMmsi(mmsi, { timeoutMs = 5000 } = {})
     
     return position;
   } catch (error) {
+    const apiKey = getApiKey();
     console.error('[AISStream] Error fetching position for MMSI:', mmsi, {
       error: error.message,
       errorType: error.constructor.name,
-      apiKeyPresent: !!API_KEY,
+      apiKeyPresent: !!apiKey,
+      apiKeyLength: apiKey?.length || 0,
+      envVarPresent: 'AISSTREAM_API_KEY' in process.env,
     });
     throw error;
   }
