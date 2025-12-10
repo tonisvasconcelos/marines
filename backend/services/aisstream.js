@@ -84,9 +84,21 @@ async function streamPositions({ boundingBoxes, shipMMSI, timeoutMs = 2000, maxM
       resolve(Array.from(results.values()));
     };
 
-    const timer = setTimeout(finalize, timeoutMs);
+    const timer = setTimeout(() => {
+      console.warn('[AISStream] Timeout reached:', {
+        timeoutMs,
+        resultsCount: results.size,
+        shipMMSI: shipMMSI?.length || 0,
+      });
+      finalize();
+    }, timeoutMs);
 
     ws.on('open', () => {
+      console.log('[AISStream] WebSocket opened, sending subscription:', {
+        boundingBoxesCount: boundingBoxes.length,
+        shipMMSI: shipMMSI?.length || 0,
+        filterTypes: payload.FilterMessageTypes.length,
+      });
       ws.send(JSON.stringify(payload));
     });
 
@@ -96,18 +108,40 @@ async function streamPositions({ boundingBoxes, shipMMSI, timeoutMs = 2000, maxM
         const normalized = normalizePosition(parsed);
         if (normalized?.mmsi) {
           results.set(normalized.mmsi, normalized);
+          console.log('[AISStream] Received position message:', {
+            mmsi: normalized.mmsi,
+            totalResults: results.size,
+            lat: normalized.lat,
+            lon: normalized.lon,
+          });
           if (results.size >= maxMessages) {
             clearTimeout(timer);
             finalize();
           }
+        } else {
+          console.debug('[AISStream] Received message without valid MMSI:', {
+            hasMeta: !!parsed?.MetaData,
+            hasPosition: !!parsed?.PositionReport,
+            messageType: parsed?.MessageType,
+          });
         }
       } catch (err) {
-        // swallow parse errors for robustness
-        console.warn('AISStream parse error:', err.message);
+        // Log parse errors but continue processing
+        console.warn('[AISStream] Parse error:', {
+          error: err.message,
+          dataLength: data.toString().length,
+          dataPreview: data.toString().substring(0, 100),
+        });
       }
     });
 
     ws.on('error', (err) => {
+      console.error('[AISStream] WebSocket error:', {
+        error: err.message,
+        code: err.code,
+        apiKeyPresent: !!apiKey,
+        wsUrl: WS_URL,
+      });
       clearTimeout(timer);
       if (!settled) {
         settled = true;
@@ -115,7 +149,13 @@ async function streamPositions({ boundingBoxes, shipMMSI, timeoutMs = 2000, maxM
       }
     });
 
-    ws.on('close', () => {
+    ws.on('close', (code, reason) => {
+      console.log('[AISStream] WebSocket closed:', {
+        code,
+        reason: reason?.toString(),
+        resultsCount: results.size,
+        settled,
+      });
       clearTimeout(timer);
       finalize();
     });

@@ -220,10 +220,24 @@ router.get('/:id/position', async (req, res) => {
     
     // Try AISStream first (now the default provider)
     if (vessel.mmsi) {
+      console.log('[Vessel Position] Attempting to fetch from AISStream:', {
+        vesselId: id,
+        vesselName: vessel.name,
+        mmsi: vessel.mmsi,
+        apiKeyPresent: !!process.env.AISSTREAM_API_KEY,
+      });
+      
       try {
         const position = await fetchLatestPositionByMmsi(String(vessel.mmsi));
         
         if (position && position.lat !== undefined && position.lon !== undefined) {
+          console.log('[Vessel Position] Successfully fetched from AISStream:', {
+            vesselId: id,
+            mmsi: vessel.mmsi,
+            lat: position.lat,
+            lon: position.lon,
+          });
+          
           const positionData = {
             lat: position.lat,
             lon: position.lon,
@@ -255,14 +269,22 @@ router.get('/:id/position', async (req, res) => {
           
           res.json(positionData);
           return;
+        } else {
+          console.warn('[Vessel Position] AISStream returned null or invalid position:', {
+            vesselId: id,
+            mmsi: vessel.mmsi,
+            position: position,
+          });
         }
       } catch (error) {
         console.error('[Vessel Position] Failed to fetch position from AISStream:', {
           vesselId: id,
           mmsi: vessel.mmsi,
           error: error.message,
+          errorStack: error.stack,
           errorType: error.constructor.name,
           apiKeyConfigured: !!process.env.AISSTREAM_API_KEY,
+          apiKeyLength: process.env.AISSTREAM_API_KEY?.length || 0,
         });
         // Fall through to fallback options
       }
