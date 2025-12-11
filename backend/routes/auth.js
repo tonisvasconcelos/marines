@@ -16,7 +16,7 @@ const refreshTokens = new Map(); // token -> { userId, tenantId, role, jti }
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function issueAccessToken(payload) {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: ACCESS_TOKEN_TTL, jti: crypto.randomUUID() });
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: ACCESS_TOKEN_TTL });
 }
 
 function issueRefreshToken(payload, jti) {
