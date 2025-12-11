@@ -61,7 +61,7 @@ function getAuthParams() {
 async function makeRequest(endpoint, params = {}) {
   const authParams = getAuthParams();
   
-  // Build query string for endpoint parameters only (not auth)
+  // Build query string for endpoint parameters
   const queryParts = [];
   for (const [key, value] of Object.entries(params)) {
     if (value !== null && value !== undefined && value !== '') {
@@ -69,6 +69,10 @@ async function makeRequest(endpoint, params = {}) {
       const encodedValue = encodeURIComponent(String(value));
       queryParts.push(`${encodedKey}=${encodedValue}`);
     }
+  }
+  // Include secret key as query parameter if available (some endpoints may require it)
+  if (authParams.secretKey) {
+    queryParts.push(`secret=${encodeURIComponent(authParams.secretKey)}`);
   }
   const queryString = queryParts.join('&');
   const url = `${API_BASE_URL}/api/${API_VERSION}/${endpoint}${queryString ? `?${queryString}` : ''}`;
@@ -298,9 +302,9 @@ export async function fetchLatestPosition(identifier, { type = 'mmsi' } = {}) {
   });
   
   try {
-    // Use the correct endpoint: /vessels with query parameters (mmsi or imo)
+    // Use the correct endpoint: /vessel/current-position with query parameters (mmsi or imo)
     const params = type === 'imo' ? { imo: identifier } : { mmsi: identifier };
-    const response = await makeRequest('vessels', params);
+    const response = await makeRequest('vessel/current-position', params);
     const position = normalizePosition(response);
     
     if (position) {
