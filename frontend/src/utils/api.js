@@ -9,6 +9,7 @@ export function createApiClient() {
 
   let isRefreshing = false;
   let refreshPromise = null;
+  let redirectingToLogin = false; // Prevent multiple redirects
 
   async function refreshToken() {
     if (isRefreshing && refreshPromise) {
@@ -86,8 +87,18 @@ export function createApiClient() {
           // retry once with refreshed token
           return request(endpoint, { ...options, headers: { ...headers, Authorization: `Bearer ${newToken}` } });
         }
-        // Refresh failed - clear auth and redirect
-        window.location.href = '/login';
+        // Refresh failed - clear auth and redirect (only once)
+        if (!redirectingToLogin && window.location.pathname !== '/login') {
+          redirectingToLogin = true;
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('auth_refresh');
+          localStorage.removeItem('auth_user');
+          localStorage.removeItem('auth_tenant');
+          // Use a small delay to prevent rapid redirects
+          setTimeout(() => {
+            window.location.href = '/login';
+          }, 100);
+        }
         throw new Error('Unauthorized');
       }
 

@@ -23,12 +23,26 @@ function Dashboard() {
     queryKey: ['dashboard', 'stats'],
     queryFn: () => api.get('/dashboard/stats'),
     refetchInterval: 30000, // Refresh every 30 seconds
+    retry: (failureCount, error) => {
+      // Don't retry on auth errors
+      if (error?.message?.includes('Unauthorized') || error?.message?.includes('Forbidden')) {
+        return false;
+      }
+      return failureCount < 1;
+    },
   });
 
   const { data: activeVessels, isLoading: vesselsLoading, error: vesselsError } = useQuery({
     queryKey: ['dashboard', 'active-vessels'],
     queryFn: () => api.get('/dashboard/active-vessels'),
     refetchInterval: 30000, // Refresh every 30 seconds
+    retry: (failureCount, error) => {
+      // Don't retry on auth errors
+      if (error?.message?.includes('Unauthorized') || error?.message?.includes('Forbidden')) {
+        return false;
+      }
+      return failureCount < 1;
+    },
   });
 
   // Debug logging
@@ -45,6 +59,13 @@ function Dashboard() {
     queryKey: ['dashboard', 'events'],
     queryFn: () => api.get('/dashboard/events'),
     refetchInterval: 15000, // Refresh every 15 seconds
+    retry: (failureCount, error) => {
+      // Don't retry on auth errors
+      if (error?.message?.includes('Unauthorized') || error?.message?.includes('Forbidden')) {
+        return false;
+      }
+      return failureCount < 1;
+    },
   });
 
   // CRITICAL: Client-side tenant filtering as defensive measure

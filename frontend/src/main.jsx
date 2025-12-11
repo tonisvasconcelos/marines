@@ -10,7 +10,17 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false,
-      retry: 1,
+      refetchOnReconnect: true,
+      refetchOnMount: true,
+      retry: (failureCount, error) => {
+        // Don't retry on 401/403 errors (authentication/authorization issues)
+        if (error?.message?.includes('Unauthorized') || error?.message?.includes('Forbidden')) {
+          return false;
+        }
+        // Retry up to 1 time for other errors
+        return failureCount < 1;
+      },
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff
     },
   },
 });
