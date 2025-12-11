@@ -25,7 +25,7 @@ function getSecretKey() {
 
 /**
  * Get authentication parameters for API requests
- * MyShipTracking uses query parameters, not headers
+ * MyShipTracking uses headers for authentication, not query parameters
  */
 function getAuthParams() {
   const apiKey = getApiKey();
@@ -36,25 +36,22 @@ function getAuthParams() {
   }
   
   return {
-    apikey: apiKey,
-    secret: secretKey,
+    apiKey,
+    secretKey,
   };
 }
 
 /**
  * Make HTTP request to MyShipTracking API
- * Authentication uses query parameters (apikey, secret), not headers
+ * Authentication uses headers (x-api-key and x-api-secret), not query parameters
  */
 async function makeRequest(endpoint, params = {}) {
   const authParams = getAuthParams();
-  const allParams = { ...authParams, ...params };
   
-  // Build query string manually to ensure proper encoding
-  // Note: encodeURIComponent properly encodes all special characters including @, %, *, etc.
+  // Build query string for endpoint parameters only (not auth)
   const queryParts = [];
-  for (const [key, value] of Object.entries(allParams)) {
+  for (const [key, value] of Object.entries(params)) {
     if (value !== null && value !== undefined && value !== '') {
-      // Double-check: ensure we're encoding both key and value
       const encodedKey = encodeURIComponent(key);
       const encodedValue = encodeURIComponent(String(value));
       queryParts.push(`${encodedKey}=${encodedValue}`);
@@ -63,53 +60,23 @@ async function makeRequest(endpoint, params = {}) {
   const queryString = queryParts.join('&');
   const url = `${API_BASE_URL}/api/${API_VERSION}/${endpoint}${queryString ? `?${queryString}` : ''}`;
   
-  // Debug: Log encoding to verify special characters are handled correctly
-  // Note: The * character should be encoded as %2A
-  const encodedApiKey = encodeURIComponent(authParams.apikey);
-  const encodedSecret = encodeURIComponent(authParams.secret);
-  
-  console.log('[MyShipTracking] Encoding verification:', {
-    apiKeyContainsSpecialChars: /[@%*]/.test(authParams.apikey),
-    apiKeyEncoded: encodedApiKey,
-    apiKeyHasAsterisk: authParams.apikey.includes('*'),
-    apiKeyAsteriskEncoded: encodedApiKey.includes('%2A'),
-    secretEncoded: encodedSecret,
-    queryStringSample: queryString.substring(0, 100),
-  });
-  
-  // Debug: Log actual URL structure (without sensitive values)
-  const debugUrl = url.replace(/([?&])(apikey|secret)=[^&]*/g, (match, separator) => {
-    return separator === '?' ? '?[AUTH]' : '&[AUTH]';
-  });
-  
-  // Log full query string parts to verify encoding
-  const queryPartsDebug = queryParts.map(part => {
-    if (part.startsWith('apikey=')) {
-      return `apikey=[REDACTED] (length: ${authParams.apikey.length})`;
-    } else if (part.startsWith('secret=')) {
-      return `secret=[REDACTED] (length: ${authParams.secret.length})`;
-    }
-    return part;
-  });
-  
   console.log('[MyShipTracking] API Request:', {
     endpoint,
-    url: debugUrl,
+    url: url.replace(/\?.*$/, '?[PARAMS]'), // Hide query params in log
     paramsCount: Object.keys(params).length,
-    hasAuthParams: !!authParams.apikey && !!authParams.secret,
-    authParamsKeys: Object.keys(authParams),
-    queryStringLength: queryString.length,
-    queryStringPreview: queryString.substring(0, 50) + '...',
-    queryParts: queryPartsDebug,
-    apiKeyFirstChars: authParams.apikey.substring(0, 10),
-    apiKeyLastChars: authParams.apikey.substring(authParams.apikey.length - 5),
-    secretFirstChars: authParams.secret.substring(0, 5),
+    hasAuthParams: !!authParams.apiKey && !!authParams.secretKey,
+    apiKeyLength: authParams.apiKey?.length || 0,
+    secretKeyLength: authParams.secretKey?.length || 0,
+    apiKeyFirstChars: authParams.apiKey?.substring(0, 5) || 'N/A',
+    secretKeyFirstChars: authParams.secretKey?.substring(0, 3) || 'N/A',
   });
   
   try {
     const response = await fetch(url, { 
       headers: {
         'Accept': 'application/json',
+        'x-api-key': authParams.apiKey,
+        'x-api-secret': authParams.secretKey,
       },
       method: 'GET',
     });
