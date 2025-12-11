@@ -251,12 +251,20 @@ export function VesselLayer({ map, vessels, tenantVessels = [], onVesselClick, o
     const clusterLayerId = 'vessels-clusters';
     const clusterCountLayerId = 'vessels-cluster-count';
 
-    // Remove existing layers and sources (with safety checks)
+    // Remove existing layers first (with safety checks)
     try {
-      if (map.getLayer && map.getLayer(layerId)) map.removeLayer(layerId);
-      if (map.getLayer && map.getLayer(clusterLayerId)) map.removeLayer(clusterLayerId);
-      if (map.getLayer && map.getLayer(clusterCountLayerId)) map.removeLayer(clusterCountLayerId);
-      if (map.getSource && map.getSource(sourceId)) map.removeSource(sourceId);
+      if (map.getLayer && map.getLayer(layerId)) {
+        map.removeLayer(layerId);
+        console.log('[VesselLayer] Removed existing layer:', layerId);
+      }
+      if (map.getLayer && map.getLayer(clusterLayerId)) {
+        map.removeLayer(clusterLayerId);
+        console.log('[VesselLayer] Removed existing layer:', clusterLayerId);
+      }
+      if (map.getLayer && map.getLayer(clusterCountLayerId)) {
+        map.removeLayer(clusterCountLayerId);
+        console.log('[VesselLayer] Removed existing layer:', clusterCountLayerId);
+      }
     } catch (error) {
       console.warn('[VesselLayer] Error removing existing layers:', error);
       // Continue anyway - layers might not exist yet
@@ -267,76 +275,119 @@ export function VesselLayer({ map, vessels, tenantVessels = [], onVesselClick, o
     if (existingSource) {
       // Update existing source
       console.log('[VesselLayer] Updating existing source with', vesselGeoJSON.features.length, 'features');
-      existingSource.setData(vesselGeoJSON);
-    } else {
-      // Add new source
-      console.log('[VesselLayer] Adding new source with', vesselGeoJSON.features.length, 'features');
-      map.addSource(sourceId, {
-        type: 'geojson',
-        data: vesselGeoJSON,
-        cluster: true, // Enable clustering
-        clusterMaxZoom: 14, // Max zoom to cluster points on
-        clusterRadius: 50, // Radius of each cluster when clustering points
-        clusterProperties: {
-          // Keep separate counts for different vessel types
-          sum: ['+', ['get', 'point_count']],
-        },
-      });
+      try {
+        existingSource.setData(vesselGeoJSON);
+        console.log('[VesselLayer] ✅ Source data updated successfully');
+      } catch (error) {
+        console.error('[VesselLayer] ❌ Error updating source data:', error);
+        // If update fails, remove and recreate
+        try {
+          map.removeSource(sourceId);
+          console.log('[VesselLayer] Removed source to recreate');
+        } catch (removeError) {
+          console.warn('[VesselLayer] Error removing source:', removeError);
+        }
+        existingSource = null; // Will be recreated below
+      }
+    }
+    
+    // Add new source if it doesn't exist or was removed
+    if (!existingSource || !map.getSource(sourceId)) {
+      try {
+        console.log('[VesselLayer] Adding new source with', vesselGeoJSON.features.length, 'features');
+        map.addSource(sourceId, {
+          type: 'geojson',
+          data: vesselGeoJSON,
+          cluster: true, // Enable clustering
+          clusterMaxZoom: 14, // Max zoom to cluster points on
+          clusterRadius: 50, // Radius of each cluster when clustering points
+          clusterProperties: {
+            // Keep separate counts for different vessel types
+            sum: ['+', ['get', 'point_count']],
+          },
+        });
+        console.log('[VesselLayer] ✅ Source added successfully');
+      } catch (error) {
+        console.error('[VesselLayer] ❌ Error adding source:', error);
+        return; // Can't continue without source
+      }
     }
 
+    // Always re-add layers (they were removed above)
     // Add cluster circles
-    map.addLayer({
-      id: clusterLayerId,
-      type: 'circle',
-      source: sourceId,
-      filter: ['has', 'point_count'],
-      paint: {
-        'circle-color': '#3b82f6',
-        'circle-radius': [
-          'step',
-          ['get', 'point_count'],
-          20, // Default radius
-          10, 30,  // 10+ vessels: 30px
-          50, 40,  // 50+ vessels: 40px
-          100, 50, // 100+ vessels: 50px
-        ],
-        'circle-opacity': 0.6,
-        'circle-stroke-width': 2,
-        'circle-stroke-color': '#fff',
-      },
-    });
+    try {
+      if (!map.getLayer(clusterLayerId)) {
+        map.addLayer({
+          id: clusterLayerId,
+          type: 'circle',
+          source: sourceId,
+          filter: ['has', 'point_count'],
+          paint: {
+            'circle-color': '#3b82f6',
+            'circle-radius': [
+              'step',
+              ['get', 'point_count'],
+              20, // Default radius
+              10, 30,  // 10+ vessels: 30px
+              50, 40,  // 50+ vessels: 40px
+              100, 50, // 100+ vessels: 50px
+            ],
+            'circle-opacity': 0.6,
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#fff',
+          },
+        });
+        console.log('[VesselLayer] ✅ Cluster layer added');
+      }
+    } catch (error) {
+      console.error('[VesselLayer] ❌ Error adding cluster layer:', error);
+    }
 
     // Add cluster count labels
-    map.addLayer({
-      id: clusterCountLayerId,
-      type: 'symbol',
-      source: sourceId,
-      filter: ['has', 'point_count'],
-      layout: {
-        'text-field': '{sum}',
-        'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
-        'text-size': 12,
-      },
-      paint: {
-        'text-color': '#fff',
-      },
-    });
+    try {
+      if (!map.getLayer(clusterCountLayerId)) {
+        map.addLayer({
+          id: clusterCountLayerId,
+          type: 'symbol',
+          source: sourceId,
+          filter: ['has', 'point_count'],
+          layout: {
+            'text-field': '{sum}',
+            'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
+            'text-size': 12,
+          },
+          paint: {
+            'text-color': '#fff',
+          },
+        });
+        console.log('[VesselLayer] ✅ Cluster count layer added');
+      }
+    } catch (error) {
+      console.error('[VesselLayer] ❌ Error adding cluster count layer:', error);
+    }
 
     // Add individual vessel markers (non-clustered)
     // Use color-coded circles for now (can be enhanced with custom icons later)
-    map.addLayer({
-      id: layerId,
-      type: 'circle',
-      source: sourceId,
-      filter: ['!', ['has', 'point_count']],
-      paint: {
-        'circle-radius': 8,
-        'circle-color': ['get', 'color'],
-        'circle-stroke-width': 2,
-        'circle-stroke-color': '#fff',
-        'circle-opacity': 0.9,
-      },
-    });
+    try {
+      if (!map.getLayer(layerId)) {
+        map.addLayer({
+          id: layerId,
+          type: 'circle',
+          source: sourceId,
+          filter: ['!', ['has', 'point_count']],
+          paint: {
+            'circle-radius': 8,
+            'circle-color': ['get', 'color'],
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#fff',
+            'circle-opacity': 0.9,
+          },
+        });
+        console.log('[VesselLayer] ✅ Vessel layer added');
+      }
+    } catch (error) {
+      console.error('[VesselLayer] ❌ Error adding vessel layer:', error);
+    }
 
     // Create a single vessel icon image (reusable for all vessels)
     // We'll use a generic icon and apply rotation via layout property
