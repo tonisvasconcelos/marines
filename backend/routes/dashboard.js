@@ -92,6 +92,9 @@ router.get('/stats', async (req, res) => {
 });
 
 // GET /api/dashboard/active-vessels - Get all active vessels with positions
+// IMPORTANT: Returns ALL vessels from the tenant's database, attempting to fetch
+// positions for each. Vessels without positions will have position: null.
+// The frontend map will only display vessels with valid positions.
 router.get('/active-vessels', async (req, res) => {
   const { tenantId } = req;
   
@@ -109,6 +112,8 @@ router.get('/active-vessels', async (req, res) => {
       console.error('Error fetching vessels from database, using mock data:', error);
       vessels = getMockVessels(tenantId);
     }
+    
+    console.log(`[dashboard/active-vessels] Found ${vessels.length} vessels in database for tenant ${tenantId}`);
   
   const portCalls = getMockPortCalls(tenantId);
   const aisConfig = getAisConfig(tenantId);
@@ -260,10 +265,19 @@ router.get('/active-vessels', async (req, res) => {
         }
       } else {
         // Vessel at sea - get AIS position (real API)
+        // CRITICAL: Always attempt to fetch position for all vessels from database
         try {
           position = await getVesselPosition(vessel);
+          if (!position) {
+            console.warn(`[Dashboard] No position available for vessel ${vessel.id} (${vessel.name}) - MMSI: ${vessel.mmsi}, IMO: ${vessel.imo}`);
+          }
         } catch (error) {
-          console.error(`[Dashboard] Error getting position for vessel ${vessel.id}:`, error.message);
+          console.error(`[Dashboard] Error getting position for vessel ${vessel.id} (${vessel.name}):`, {
+            error: error.message,
+            mmsi: vessel.mmsi,
+            imo: vessel.imo,
+            hasIdentifier: !!(vessel.mmsi || vessel.imo),
+          });
           position = null;
         }
       }
@@ -363,6 +377,11 @@ router.get('/active-vessels', async (req, res) => {
       }
     }
   }
+  
+  // IMPORTANT: Return ALL vessels from database, even if position fetch failed
+  // This ensures users can see all their vessels on the dashboard
+  // Vessels without positions will have position: null, which the frontend can handle
+  console.log(`[dashboard/active-vessels] Returning ${activeVessels.length} vessels (${activeVessels.filter(v => v.position).length} with positions)`);
   
   res.json(activeVessels);
   } catch (error) {
