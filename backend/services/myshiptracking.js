@@ -96,23 +96,41 @@ async function makeRequest(endpoint, params = {}) {
       method: 'GET',
     });
     
-    const data = await response.json();
+    let data;
+    try {
+      data = await response.json();
+    } catch (parseError) {
+      // If response is not JSON, get text instead
+      const text = await response.text();
+      console.error('[MyShipTracking] Non-JSON response:', {
+        status: response.status,
+        statusText: response.statusText,
+        text: text.substring(0, 500),
+        endpoint,
+      });
+      throw new Error(`API returned non-JSON response: ${response.status} ${response.statusText}`);
+    }
     
     if (!response.ok) {
-      const errorCode = data.error_code || 'UNKNOWN';
-      const errorMessage = data.message || `API error: ${response.status}`;
+      const errorCode = data.error_code || data.errorCode || 'UNKNOWN';
+      const errorMessage = data.message || data.error || `API error: ${response.status}`;
       
       console.error('[MyShipTracking] API Error:', {
         status: response.status,
+        statusText: response.statusText,
         errorCode,
         errorMessage,
         endpoint,
         responseData: data,
+        apiKeyLength: authParams.apikey?.length || 0,
+        secretKeyLength: authParams.secret?.length || 0,
+        apiKeyFirstChars: authParams.apikey?.substring(0, 5) || 'N/A',
+        secretKeyFirstChars: authParams.secret?.substring(0, 3) || 'N/A',
       });
       
       // Handle specific error codes
       if (response.status === 401) {
-        throw new Error('Invalid API credentials');
+        throw new Error('Invalid API credentials - Please verify MYSHIPTRACKING_API_KEY and MYSHIPTRACKING_SECRET_KEY are correct');
       } else if (response.status === 402) {
         throw new Error('Insufficient credits');
       } else if (response.status === 404) {
@@ -248,9 +266,13 @@ function normalizeZoneVessels(response) {
  */
 export async function fetchLatestPosition(identifier, { type = 'mmsi' } = {}) {
   const apiKey = getApiKey();
-  if (!apiKey) {
-    console.error('[MyShipTracking] MYSHIPTRACKING_API_KEY is not set');
-    throw new Error('MYSHIPTRACKING_API_KEY is not configured');
+  const secretKey = getSecretKey();
+  if (!apiKey || !secretKey) {
+    console.error('[MyShipTracking] API credentials not configured:', {
+      hasApiKey: !!apiKey,
+      hasSecretKey: !!secretKey,
+    });
+    throw new Error('MYSHIPTRACKING_API_KEY and MYSHIPTRACKING_SECRET_KEY must be set');
   }
   
   console.log('[MyShipTracking] Fetching position:', {
@@ -315,9 +337,13 @@ export async function fetchLatestPositionByImo(imo) {
  */
 export async function fetchTrack(identifier, { type = 'mmsi', hours = 24 } = {}) {
   const apiKey = getApiKey();
-  if (!apiKey) {
-    console.error('[MyShipTracking] MYSHIPTRACKING_API_KEY is not set');
-    throw new Error('MYSHIPTRACKING_API_KEY is not configured');
+  const secretKey = getSecretKey();
+  if (!apiKey || !secretKey) {
+    console.error('[MyShipTracking] API credentials not configured:', {
+      hasApiKey: !!apiKey,
+      hasSecretKey: !!secretKey,
+    });
+    throw new Error('MYSHIPTRACKING_API_KEY and MYSHIPTRACKING_SECRET_KEY must be set');
   }
   
   console.log('[MyShipTracking] Fetching track:', {
