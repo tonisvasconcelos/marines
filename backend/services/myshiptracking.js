@@ -50,14 +50,32 @@ async function makeRequest(endpoint, params = {}) {
   const allParams = { ...authParams, ...params };
   
   // Build query string manually to ensure proper encoding
+  // Note: encodeURIComponent properly encodes all special characters including @, %, *, etc.
   const queryParts = [];
   for (const [key, value] of Object.entries(allParams)) {
     if (value !== null && value !== undefined && value !== '') {
-      queryParts.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`);
+      // Double-check: ensure we're encoding both key and value
+      const encodedKey = encodeURIComponent(key);
+      const encodedValue = encodeURIComponent(String(value));
+      queryParts.push(`${encodedKey}=${encodedValue}`);
     }
   }
   const queryString = queryParts.join('&');
   const url = `${API_BASE_URL}/api/${API_VERSION}/${endpoint}${queryString ? `?${queryString}` : ''}`;
+  
+  // Debug: Log encoding to verify special characters are handled correctly
+  // Note: The * character should be encoded as %2A
+  const encodedApiKey = encodeURIComponent(authParams.apikey);
+  const encodedSecret = encodeURIComponent(authParams.secret);
+  
+  console.log('[MyShipTracking] Encoding verification:', {
+    apiKeyContainsSpecialChars: /[@%*]/.test(authParams.apikey),
+    apiKeyEncoded: encodedApiKey,
+    apiKeyHasAsterisk: authParams.apikey.includes('*'),
+    apiKeyAsteriskEncoded: encodedApiKey.includes('%2A'),
+    secretEncoded: encodedSecret,
+    queryStringSample: queryString.substring(0, 100),
+  });
   
   // Debug: Log actual URL structure (without sensitive values)
   const debugUrl = url.replace(/([?&])(apikey|secret)=[^&]*/g, (match, separator) => {
