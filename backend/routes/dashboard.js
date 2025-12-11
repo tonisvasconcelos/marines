@@ -567,34 +567,98 @@ router.get('/events', async (req, res) => {
 });
 
 // GET /api/dashboard/geofences - Get operational zones for map
-router.get('/geofences', (req, res) => {
+router.get('/geofences', async (req, res) => {
   const { tenantId } = req;
-  const opsSites = getMockOpsSites(tenantId);
   
-  const geofences = opsSites.map((site) => {
-    const geofence = {
-      id: site.id,
-      name: site.name,
-      type: site.type,
-    };
+  try {
+    // Try to get from database first
+    const portsDb = await import('../db/ports.js');
+    const ports = await portsDb.getPorts(tenantId);
     
-    // If polygon exists, use it; otherwise use circular geofence
-    if (site.polygon && site.polygon.length >= 3) {
-      geofence.polygon = site.polygon;
-    } else {
-      geofence.center = {
-        lat: site.latitude,
-        lon: site.longitude,
+    const geofences = ports.map((port) => {
+      const geofence = {
+        id: port.id,
+        name: port.name,
+        type: port.type || 'PORT',
       };
-      geofence.radius = site.type === 'PORT' ? 5000 : 
-                        site.type === 'TERMINAL' ? 2000 : 
-                        site.type === 'BERTH' ? 500 : 10000;
+      
+      // If polygon exists, use it; otherwise use circular geofence
+      if (port.polygon && Array.isArray(port.polygon) && port.polygon.length >= 3) {
+        geofence.polygon = port.polygon;
+      } else if (port.lat && port.lon) {
+        geofence.center = {
+          lat: port.lat || port.latitude,
+          lon: port.lon || port.longitude,
+        };
+        geofence.radius = port.type === 'PORT' ? 5000 : 
+                          port.type === 'TERMINAL' ? 2000 : 
+                          port.type === 'BERTH' ? 500 : 10000;
+      }
+      
+      return geofence;
+    });
+    
+    // If no ports in database, fallback to mock data (development only)
+    if (geofences.length === 0 && process.env.NODE_ENV !== 'production') {
+      const opsSites = getMockOpsSites(tenantId);
+      const mockGeofences = opsSites.map((site) => {
+        const geofence = {
+          id: site.id,
+          name: site.name,
+          type: site.type,
+        };
+        
+        if (site.polygon && site.polygon.length >= 3) {
+          geofence.polygon = site.polygon;
+        } else {
+          geofence.center = {
+            lat: site.latitude,
+            lon: site.longitude,
+          };
+          geofence.radius = site.type === 'PORT' ? 5000 : 
+                            site.type === 'TERMINAL' ? 2000 : 
+                            site.type === 'BERTH' ? 500 : 10000;
+        }
+        
+        return geofence;
+      });
+      
+      return res.json(mockGeofences);
     }
     
-    return geofence;
-  });
-  
-  res.json(geofences);
+    res.json(geofences);
+  } catch (error) {
+    console.error('Error fetching geofences:', error);
+    // Fallback to mock data on error (development only)
+    if (process.env.NODE_ENV !== 'production') {
+      const opsSites = getMockOpsSites(tenantId);
+      const geofences = opsSites.map((site) => {
+        const geofence = {
+          id: site.id,
+          name: site.name,
+          type: site.type,
+        };
+        
+        if (site.polygon && site.polygon.length >= 3) {
+          geofence.polygon = site.polygon;
+        } else {
+          geofence.center = {
+            lat: site.latitude,
+            lon: site.longitude,
+          };
+          geofence.radius = site.type === 'PORT' ? 5000 : 
+                            site.type === 'TERMINAL' ? 2000 : 
+                            site.type === 'BERTH' ? 500 : 10000;
+        }
+        
+        return geofence;
+      });
+      
+      return res.json(geofences);
+    }
+    
+    res.status(500).json({ message: 'Failed to fetch geofences' });
+  }
 });
 
 export default router;

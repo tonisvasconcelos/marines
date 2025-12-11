@@ -223,24 +223,32 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 );
 CREATE INDEX IF NOT EXISTS idx_audit_logs_tenant_id ON audit_logs(tenant_id);
 
--- Ports Table
--- Stores port information from MyShipTracking and other sources
+-- Ports Table (also serves as Ops Sites/Zones)
+-- Stores port information from MyShipTracking and operational zones/sites
+-- Maps to Ops Sites in the application (PORT, TERMINAL, BERTH, ANCHORED_ZONE types)
 CREATE TABLE IF NOT EXISTS ports (
   id VARCHAR(255) PRIMARY KEY,
   tenant_id VARCHAR(255) NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-  port_id VARCHAR(255), -- MyShipTracking port_id
-  unlocode VARCHAR(10), -- UN/LOCODE (e.g., 'BRRIO', 'USNYC')
+  port_id VARCHAR(255), -- MyShipTracking port_id (optional, for external ports)
+  unlocode VARCHAR(10), -- UN/LOCODE (e.g., 'BRRIO', 'USNYC') - maps to 'code' in Ops Sites
+  code VARCHAR(50), -- Ops Site code (e.g., 'BRRIO', 'BRRIO-T1', 'BRRIO-ANCH-A')
   name TEXT NOT NULL,
-  country_code VARCHAR(5),
+  type VARCHAR(50) NOT NULL DEFAULT 'PORT', -- PORT, TERMINAL, BERTH, ANCHORED_ZONE
+  country_code VARCHAR(5), -- Maps to 'country' in Ops Sites
   timezone VARCHAR(50),
-  lat DECIMAL(10, 8),
-  lon DECIMAL(11, 8),
+  lat DECIMAL(10, 8), -- Maps to 'latitude' in Ops Sites
+  lon DECIMAL(11, 8), -- Maps to 'longitude' in Ops Sites
+  polygon JSONB, -- Polygon coordinates for geofences (stored as JSON array)
+  parent_code VARCHAR(50), -- Parent ops site code for hierarchical relationships
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_ports_tenant_id ON ports(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_ports_unlocode ON ports(unlocode);
 CREATE INDEX IF NOT EXISTS idx_ports_port_id ON ports(port_id);
+CREATE INDEX IF NOT EXISTS idx_ports_code ON ports(code);
+CREATE INDEX IF NOT EXISTS idx_ports_type ON ports(type);
+CREATE INDEX IF NOT EXISTS idx_ports_parent_code ON ports(parent_code);
 
 -- Fleets Table
 -- Stores fleet information for organizing vessels
