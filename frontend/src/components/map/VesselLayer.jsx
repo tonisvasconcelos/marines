@@ -6,7 +6,7 @@
 
 import { useEffect, useRef, useMemo } from 'react';
 import maplibregl from 'maplibre-gl';
-import { normalizeVesselPosition } from '../../utils/coordinateUtils';
+// Using direct coordinate extraction (same as MapView) instead of normalizeVesselPosition
 
 /**
  * Get vessel type color (MyShipTracking color scheme)
@@ -111,19 +111,63 @@ export function VesselLayer({ map, vessels, tenantVessels = [], onVesselClick, o
           return null;
         }
 
-        // Normalize coordinates (preserves full precision)
-        // Handle both lng and lon for compatibility, and various field names
-        const normalizedPos = normalizeVesselPosition({
-          lat: positionData.lat || positionData.latitude || vessel.lat,
-          lon: positionData.lon || positionData.longitude || positionData.lng || vessel.lon || vessel.lng,
+        // Extract coordinates using the same method as MapView (vessel detail page)
+        // This ensures consistency with the working vessel card implementation
+        let lat = positionData.lat ?? positionData.latitude ?? positionData.Lat ?? positionData.Latitude ?? vessel.lat ?? null;
+        let lon = positionData.lon ?? positionData.longitude ?? positionData.Lon ?? positionData.Longitude ?? positionData.lng ?? vessel.lon ?? vessel.lng ?? null;
+        
+        // Convert to numbers if strings (use parseFloat to preserve full decimal precision)
+        // CRITICAL: Do NOT use parseInt, Math.round, toFixed, or any rounding here
+        if (typeof lat === 'string') lat = parseFloat(lat);
+        if (typeof lon === 'string') lon = parseFloat(lon);
+        
+        // Convert to numbers if not already (preserve full precision)
+        if (lat !== null) lat = Number(lat);
+        if (lon !== null) lon = Number(lon);
+        
+        // Validate coordinates are valid numbers and within valid ranges
+        if (lat == null || lon == null || !isFinite(lat) || !isFinite(lon)) {
+          console.warn('[VesselLayer] Invalid coordinates (not finite):', {
+            vesselId: vessel.id,
+            vesselName: vessel.name,
+            lat,
+            lon,
+            positionData,
+          });
+          return null;
+        }
+        
+        // Validate latitude is between -90 and 90
+        if (lat < -90 || lat > 90) {
+          console.warn('[VesselLayer] Invalid latitude range:', {
+            vesselId: vessel.id,
+            vesselName: vessel.name,
+            lat,
+            lon,
+          });
+          return null;
+        }
+        
+        // Validate longitude is between -180 and 180
+        if (lon < -180 || lon > 180) {
+          console.warn('[VesselLayer] Invalid longitude range:', {
+            vesselId: vessel.id,
+            vesselName: vessel.name,
+            lat,
+            lon,
+          });
+          return null;
+        }
+        
+        // CRITICAL: Use full-precision coordinates (same as MapView)
+        // MapLibre uses [lon, lat] format for coordinates
+        console.log('[VesselLayer] ✅ Valid coordinates extracted:', {
+          vesselId: vessel.id,
           vesselName: vessel.name,
+          lat,
+          lon,
+          mapLibreFormat: [lon, lat],
         });
-
-        if (!normalizedPos) return null;
-
-        // CRITICAL: Use full-precision coordinates
-        const lat = normalizedPos.lat;
-        const lon = normalizedPos.lon;
 
         // Get vessel properties (handle both position object and direct properties)
         const cog = positionData.cog ?? positionData.course ?? vessel.course ?? 0;
