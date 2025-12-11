@@ -1,9 +1,8 @@
 import express from 'express';
 import { getMockPortCalls, getMockVessels, getMockAisPosition, getMockOpsSites } from '../data/mockData.js';
-import { getAisConfig } from '../services/aisConfig.js';
 import * as vesselDb from '../db/vessels.js';
 import * as operationLogsDb from '../db/operationLogs.js';
-import { fetchLatestPosition } from '../services/myshiptracking.js';
+import { fetchLatestPosition, getProviderName } from '../services/ais/index.js';
 
 const router = express.Router();
 
@@ -116,22 +115,17 @@ router.get('/active-vessels', async (req, res) => {
     console.log(`[dashboard/active-vessels] Found ${vessels.length} vessels in database for tenant ${tenantId}`);
   
   const portCalls = getMockPortCalls(tenantId);
-  const aisConfig = getAisConfig(tenantId);
   
   // Log AIS configuration status (always log, not just in dev)
-  // Note: MyShipTracking is configured via environment variables (MYSHIPTRACKING_API_KEY, MYSHIPTRACKING_SECRET_KEY)
-  const apiKeyValue = process.env.MYSHIPTRACKING_API_KEY;
-  const secretKeyValue = process.env.MYSHIPTRACKING_SECRET_KEY;
-  const hasMyShipTrackingKey = !!apiKeyValue && !!secretKeyValue;
+  const providerName = getProviderName();
+  const hasAisApiKey = providerName.toLowerCase() === 'datalastic' 
+    ? !!process.env.DATALASTIC_API_KEY
+    : !!(process.env.MYSHIPTRACKING_API_KEY && process.env.MYSHIPTRACKING_SECRET_KEY);
   console.log('[dashboard/active-vessels] AIS Configuration:', {
     tenantId,
-    provider: 'myshiptracking',
-    hasApiKey: hasMyShipTrackingKey,
-    apiKeyLength: apiKeyValue?.length || 0,
-    secretKeyLength: secretKeyValue?.length || 0,
-    apiKeyType: typeof apiKeyValue,
-    apiKeyFirstChars: apiKeyValue ? `${apiKeyValue.substring(0, 5)}...` : 'null/undefined',
-    allEnvKeys: Object.keys(process.env).filter(k => k.includes('MYSHIPTRACKING') || k.includes('AIS')),
+    provider: providerName,
+    hasApiKey: hasAisApiKey,
+    allEnvKeys: Object.keys(process.env).filter(k => k.includes('DATALASTIC') || k.includes('MYSHIPTRACKING') || k.includes('AIS')),
   });
   
   // Normalize provider name (case-insensitive check)
@@ -161,8 +155,9 @@ router.get('/active-vessels', async (req, res) => {
     
     // Second: If no stored position and vessel has MMSI/IMO, fetch from API once
     // This ensures vessels appear on the map at least once
-    if ((vessel.mmsi || vessel.imo) && hasMyShipTrackingKey) {
+    if ((vessel.mmsi || vessel.imo) && hasAisApiKey) {
       try {
+        const providerName = getProviderName();
         console.log(`[getVesselPosition] No stored position, fetching from API for vessel ${vessel.id} (${vessel.name})`);
         
         // Clean IMO prefix if present
@@ -183,7 +178,7 @@ router.get('/active-vessels', async (req, res) => {
               cog: position.cog,
               heading: position.heading,
               navStatus: position.navStatus,
-              source: 'myshiptracking',
+              source: providerName.toLowerCase(),
             });
             console.log(`[getVesselPosition] Stored position for vessel ${vessel.id} (${vessel.name})`);
           } catch (storeError) {
@@ -198,7 +193,7 @@ router.get('/active-vessels', async (req, res) => {
             cog: position.cog,
             heading: position.heading,
             navStatus: position.navStatus,
-            source: 'myshiptracking',
+            source: providerName.toLowerCase(),
           };
         }
       } catch (apiError) {

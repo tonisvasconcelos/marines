@@ -2,8 +2,8 @@ import express from 'express';
 import { getMockOpsSites, createMockOpsSite, updateMockOpsSite, deleteMockOpsSite } from '../data/mockData.js';
 import * as portsDb from '../db/ports.js';
 import * as vesselsDb from '../db/vessels.js';
-import { fetchPortEstimates, fetchPortCalls, fetchVesselsInPort } from '../services/myshiptracking.js';
-import { myshiptrackingLimiter } from '../middleware/externalApiRateLimit.js';
+import { fetchPortEstimates, fetchPortCalls, fetchVesselsInPort } from '../services/ais/index.js';
+import { aisApiLimiter } from '../middleware/aisApiRateLimit.js';
 import crypto from 'crypto';
 
 const router = express.Router();
@@ -55,7 +55,7 @@ router.get('/', async (req, res) => {
 
 // GET /api/ops-sites/:id/port-estimates - Get port estimates (expected arrivals) from AIS API
 // Returns estimated arrivals for the last 24h, filtered to only show tenant vessels
-router.get('/:id/port-estimates', myshiptrackingLimiter, async (req, res) => {
+router.get('/:id/port-estimates', aisApiLimiter, async (req, res) => {
   const { tenantId } = req;
   const { id } = req.params;
   
@@ -87,7 +87,7 @@ router.get('/:id/port-estimates', myshiptrackingLimiter, async (req, res) => {
       });
     }
     
-    // Fetch port estimates from MyShipTracking
+    // Fetch port estimates from AIS API
     const estimates = await fetchPortEstimates(portId, { useUnloco });
     
     // Filter to only show tenant vessels
@@ -108,7 +108,7 @@ router.get('/:id/port-estimates', myshiptrackingLimiter, async (req, res) => {
 
 // GET /api/ops-sites/:id/port-calls - Get port calls from AIS API
 // Returns port call records, filtered to only show tenant vessels
-router.get('/:id/port-calls-ais', myshiptrackingLimiter, async (req, res) => {
+router.get('/:id/port-calls-ais', aisApiLimiter, async (req, res) => {
   const { tenantId } = req;
   const { id } = req.params;
   const { fromdate, todate, days = 30, type } = req.query;
@@ -148,7 +148,7 @@ router.get('/:id/port-calls-ais', myshiptrackingLimiter, async (req, res) => {
     if (days) params.days = Number(days);
     if (type !== undefined) params.type = Number(type);
     
-    // Fetch port calls from MyShipTracking
+    // Fetch port calls from AIS API
     const calls = await fetchPortCalls(params);
     
     // Filter to only show tenant vessels
@@ -169,7 +169,7 @@ router.get('/:id/port-calls-ais', myshiptrackingLimiter, async (req, res) => {
 
 // GET /api/ops-sites/:id/vessels-in-port - Get vessels currently in port from AIS API
 // Returns vessels currently in port, filtered to only show tenant vessels
-router.get('/:id/vessels-in-port', myshiptrackingLimiter, async (req, res) => {
+router.get('/:id/vessels-in-port', aisApiLimiter, async (req, res) => {
   const { tenantId } = req;
   const { id } = req.params;
   
@@ -201,7 +201,7 @@ router.get('/:id/vessels-in-port', myshiptrackingLimiter, async (req, res) => {
       });
     }
     
-    // Fetch vessels in port from MyShipTracking
+    // Fetch vessels in port from AIS API
     const vessels = await fetchVesselsInPort(portId, { useUnloco });
     
     // Filter to only show tenant vessels

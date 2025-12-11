@@ -6,24 +6,25 @@ import {
   fetchTrack,
   fetchTrackByMmsi,
   fetchVesselsInZone,
-} from '../services/myshiptracking.js';
+  getProviderName,
+} from '../services/ais/index.js';
 import * as vesselDb from '../db/vessels.js';
-import { myshiptrackingLimiter } from '../middleware/externalApiRateLimit.js';
-import { validateVesselIdentifier, validateZoneBoundsParam } from '../middleware/validateMyShipTracking.js';
+import { aisApiLimiter } from '../middleware/aisApiRateLimit.js';
+import { validateVesselIdentifier, validateZoneBoundsParam } from '../middleware/validateAis.js';
 
 const router = express.Router();
 
 // Helper function to get AIS configuration
 function getAisConfig() {
-  // MyShipTracking supports both MMSI and IMO
+  const providerName = getProviderName();
   return {
-    provider: 'myshiptracking',
+    provider: providerName.toLowerCase(),
     supportedIdentifiers: ['MMSI', 'IMO'],
   };
 }
 
 // GET /api/ais/vessel/last-position?mmsi=123 or ?imo=1234567
-router.get('/vessel/last-position', myshiptrackingLimiter, validateVesselIdentifier, async (req, res) => {
+router.get('/vessel/last-position', aisApiLimiter, validateVesselIdentifier, async (req, res) => {
   try {
     const { tenantId } = req;
     const { mmsi, imo } = req.query;
@@ -71,7 +72,7 @@ router.get('/vessel/last-position', myshiptrackingLimiter, validateVesselIdentif
           cog: position.cog,
           heading: position.heading,
           navStatus: position.navStatus,
-          source: 'myshiptracking',
+          source: getProviderName().toLowerCase(),
         };
         await vesselDb.storePositionHistory(vessel.id, tenantId, positionData);
         console.log(`[AIS] Stored position history for vessel ${vessel.id} (${type.toUpperCase()}: ${identifier})`);
@@ -96,7 +97,7 @@ router.get('/vessel/last-position', myshiptrackingLimiter, validateVesselIdentif
 });
 
 // GET /api/ais/vessel/track?mmsi=123&hours=72 or ?imo=1234567&hours=72
-router.get('/vessel/track', myshiptrackingLimiter, async (req, res) => {
+router.get('/vessel/track', aisApiLimiter, async (req, res) => {
   try {
     const { mmsi, imo, hours } = req.query;
     const aisConfig = getAisConfig();
@@ -143,7 +144,7 @@ router.get('/vessel/track', myshiptrackingLimiter, async (req, res) => {
 // GET /api/ais/zone?minlon=&maxlon=&minlat=&maxlat=
 // CRITICAL: Only returns vessels that match tenant's registered vessels (by MMSI/IMO)
 // This prevents consuming API credits on vessels not owned by the tenant
-router.get('/zone', myshiptrackingLimiter, validateZoneBoundsParam, async (req, res) => {
+router.get('/zone', aisApiLimiter, validateZoneBoundsParam, async (req, res) => {
   try {
     const { tenantId } = req;
     const { minlon, maxlon, minlat, maxlat } = req.query;
@@ -215,18 +216,21 @@ router.get('/zone', myshiptrackingLimiter, validateZoneBoundsParam, async (req, 
     console.error('[AIS Zone] Error fetching vessels in zone:', {
       error: error.message,
       errorType: error.constructor.name,
-      apiKeyConfigured: !!process.env.MYSHIPTRACKING_API_KEY,
-      secretKeyConfigured: !!process.env.MYSHIPTRACKING_SECRET_KEY,
+      provider: getProviderName(),
     });
     
     // Provide more helpful error messages
+    const providerName = getProviderName();
     if (error.message.includes('not configured') || error.message.includes('must be set')) {
+      const envVar = providerName.toLowerCase() === 'datalastic' 
+        ? 'DATALASTIC_API_KEY' 
+        : 'MYSHIPTRACKING_API_KEY and MYSHIPTRACKING_SECRET_KEY';
       return res.status(500).json({ 
-        message: 'AIS API is not properly configured. Please contact administrator to set MYSHIPTRACKING_API_KEY and MYSHIPTRACKING_SECRET_KEY environment variables.' 
+        message: `AIS API is not properly configured. Please contact administrator to set ${envVar} environment variables.` 
       });
     } else if (error.message.includes('Invalid API credentials')) {
       return res.status(401).json({ 
-        message: 'Invalid AIS API credentials. Please verify MYSHIPTRACKING_API_KEY and MYSHIPTRACKING_SECRET_KEY are correct.' 
+        message: `Invalid AIS API credentials for ${providerName}. Please verify API keys are correct.` 
       });
     }
     
@@ -237,7 +241,7 @@ router.get('/zone', myshiptrackingLimiter, validateZoneBoundsParam, async (req, 
 });
 
 // GET /api/ais/vessels/:vesselId/last-position - Bridge endpoint that accepts vesselId
-router.get('/vessels/:vesselId/last-position', myshiptrackingLimiter, async (req, res) => {
+router.get('/vessels/:vesselId/last-position', aisApiLimiter, async (req, res) => {
   try {
     const { tenantId } = req;
     const { vesselId } = req.params;
@@ -281,7 +285,7 @@ router.get('/vessels/:vesselId/last-position', myshiptrackingLimiter, async (req
         cog: position.cog,
         heading: position.heading,
         navStatus: position.navStatus,
-        source: 'myshiptracking',
+        source: getProviderName().toLowerCase(),
       };
       await vesselDb.storePositionHistory(vesselId, tenantId, positionData);
       console.log(`[AIS] Stored position history for vessel ${vesselId} (${type.toUpperCase()}: ${identifier})`);
@@ -305,7 +309,7 @@ router.get('/vessels/:vesselId/last-position', myshiptrackingLimiter, async (req
 });
 
 // GET /api/ais/vessels/:vesselId/track?hours=72 - Bridge endpoint that accepts vesselId
-router.get('/vessels/:vesselId/track', myshiptrackingLimiter, async (req, res) => {
+router.get('/vessels/:vesselId/track', aisApiLimiter, async (req, res) => {
   try {
     const { tenantId } = req;
     const { vesselId } = req.params;

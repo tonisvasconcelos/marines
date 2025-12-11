@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { searchVessels, type VesselSearchResult } from '../../api/myshiptracking';
+import { searchVessels, type VesselSearchResult } from '../../api/ais';
 import { FiSearch, FiX } from 'react-icons/fi';
 import styles from './VesselSearch.module.css';
 

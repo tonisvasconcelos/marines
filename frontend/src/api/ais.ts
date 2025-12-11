@@ -1,6 +1,7 @@
 /**
- * MyShipTracking API Client (via backend proxy under /api/ais)
- * Documentation: https://api.myshiptracking.com/
+ * AIS API Client (via backend proxy under /api/ais)
+ * Supports multiple AIS providers (Datalastic, MyShipTracking, etc.)
+ * The backend automatically routes to the configured provider
  */
 
 /**
@@ -9,8 +10,10 @@
  * We need to add /api prefix like the main api.js client does
  */
 function getApiBaseUrl() {
-  const baseUrl = import.meta.env.VITE_API_URL 
-    ? `${import.meta.env.VITE_API_URL}/api`
+  // @ts-ignore - Vite environment variables
+  const viteApiUrl = import.meta.env?.VITE_API_URL;
+  const baseUrl = viteApiUrl 
+    ? `${viteApiUrl}/api`
     : '/api';
   return baseUrl;
 }
@@ -47,22 +50,22 @@ async function makeProxyRequest<T>(
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
     // Always log to help debug production issues
-    console.log('[MyShipTracking API] ✅ Authorization header added:', {
+    console.log('[AIS API] ✅ Authorization header added:', {
       tokenLength: token.length,
       tokenPrefix: token.substring(0, 20) + '...',
       headerValue: `Bearer ${token.substring(0, 20)}...`,
     });
   } else {
     // Critical error - always log
-    console.error('[MyShipTracking API] ❌ No authentication token found!');
-    console.error('[MyShipTracking API] localStorage keys:', Object.keys(localStorage));
-    console.error('[MyShipTracking API] This will cause 401 Unauthorized errors');
-    console.error('[MyShipTracking API] Please ensure you are logged in');
+    console.error('[AIS API] ❌ No authentication token found!');
+    console.error('[AIS API] localStorage keys:', Object.keys(localStorage));
+    console.error('[AIS API] This will cause 401 Unauthorized errors');
+    console.error('[AIS API] Please ensure you are logged in');
   }
 
   try {
     // Always log request details to debug auth issues
-    console.log('[MyShipTracking API] Making request:', {
+    console.log('[AIS API] Making request:', {
       url: url.toString(),
       hasAuthHeader: !!headers['Authorization'],
       authHeaderPresent: 'Authorization' in headers,
@@ -80,8 +83,8 @@ async function makeProxyRequest<T>(
       const errorData = await response.json().catch(() => ({ error: response.statusText }));
       
       if (response.status === 401) {
-        console.error('[MyShipTracking API] ❌ 401 Unauthorized - Authentication failed!');
-        console.error('[MyShipTracking API] Request details:', {
+        console.error('[AIS API] ❌ 401 Unauthorized - Authentication failed!');
+        console.error('[AIS API] Request details:', {
           endpoint: url.toString(),
           hasToken: !!token,
           tokenLength: token?.length || 0,
@@ -90,7 +93,7 @@ async function makeProxyRequest<T>(
           responseStatus: response.status,
           responseHeaders: Object.fromEntries(response.headers.entries()),
         });
-        console.error('[MyShipTracking API] Check if token is valid and not expired');
+        console.error('[AIS API] Check if token is valid and not expired');
       }
       
       throw new Error(errorData.error || errorData.message || `API error: ${response.status}`);
@@ -118,8 +121,6 @@ interface ApiResponse<T> {
     message: string;
   };
 }
-
-// Removed - using proxy instead
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -199,17 +200,17 @@ function attachLng<T extends { lon?: number; lng?: number }>(item: T): T & { lng
 
 /**
  * Search vessels by name
- * Endpoint: /api/v2/vessel/search
+ * Note: Not all providers support this endpoint
  */
 export async function searchVessels(name: string): Promise<VesselSearchResult[]> {
-  console.warn('[MyShipTracking] Search not supported; returning empty list.');
+  console.warn('[AIS API] Search not supported; returning empty list.');
     return [];
 }
 
 /**
  * Get vessel status (single vessel)
- * Endpoint: /api/vessel/last-position
- * Note: MyShipTracking API supports both MMSI and IMO
+ * Endpoint: /api/ais/vessel/last-position
+ * Note: AIS API supports both MMSI and IMO
  */
 export async function getVesselStatus(
   mmsi?: string,
@@ -233,7 +234,6 @@ export async function getVesselStatus(
 
 /**
  * Get bulk vessel status (multiple vessels)
- * Endpoint: /api/v2/vessel/bulk
  */
 export async function getBulkStatus(
   mmsis: string[],
@@ -247,7 +247,7 @@ export async function getBulkStatus(
   const results = await Promise.all(
     limited.map((id) =>
       getVesselStatus(id, undefined, extended).catch((err) => {
-        console.warn('[MyShipTracking] Bulk fetch failed for', id, err);
+        console.warn('[AIS API] Bulk fetch failed for', id, err);
         return null;
       })
     )
@@ -257,20 +257,20 @@ export async function getBulkStatus(
 
 /**
  * Get vessels nearby a reference vessel
- * Endpoint: /api/v2/vessel/nearby
+ * Note: Not all providers support this endpoint
  */
 export async function getVesselsNearby(
   mmsi: string,
   radius: number = 20,
   extended: boolean = false
 ): Promise<NearbyVessel[]> {
-  console.warn('[MyShipTracking] Nearby query not supported; returning empty list.');
+  console.warn('[AIS API] Nearby query not supported; returning empty list.');
   return [];
 }
 
 /**
  * Get vessels in a geographic zone (bounding box)
- * Endpoint: /api/v2/vessel/zone
+ * Endpoint: /api/ais/zone
  */
 export async function getVesselsInZone(
   bounds: Bounds,
@@ -290,8 +290,8 @@ export async function getVesselsInZone(
 
 /**
  * Get vessel historical track
- * Endpoint: /api/vessel/track
- * Note: MyShipTracking API supports both MMSI and IMO
+ * Endpoint: /api/ais/vessel/track
+ * Note: AIS API supports both MMSI and IMO
  */
 export async function getVesselTrack(
   mmsi?: string,

@@ -4,7 +4,7 @@
  * MyShipTracking-style professional AIS map
  */
 
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapEngine } from './MapEngine';
 import { VesselLayer } from './VesselLayer';
@@ -15,8 +15,8 @@ import { MiniPopup } from './MiniPopup';
 import { VesselSearch } from './VesselSearch';
 import MapViewSettings from './MapViewSettings';
 import { normalizeVesselPosition } from '../../utils/coordinateUtils';
-import { getVesselsInZone } from '../../api/myshiptracking';
-import { useQuery } from '@tanstack/react-query';
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore - CSS module exists but TypeScript doesn't have type declarations
 import styles from './DashboardMap.module.css';
 
 function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, tenantVessels, showControls = true, isDashboardWidget = false }) {
@@ -31,16 +31,14 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, ten
   const hasUserInteractedRef = useRef(false);
   const initialBoundsSetRef = useRef(false);
 
-  // Fetch vessels in current map view using MyShipTracking API
-  const { data: zoneVessels } = useQuery({
-    queryKey: ['vessels-in-zone', mapBounds],
-    queryFn: () => {
-      if (!mapBounds) return [];
-      return getVesselsInZone(mapBounds, undefined, false); // Use simple response to save credits
-    },
-    enabled: !!mapBounds,
-    staleTime: 30000, // Cache for 30 seconds
-  });
+  // DISABLED: Automatic zone API calls to save credits
+  // Zone API is now only called manually via user action
+  // Users can refresh vessel positions individually from the vessel detail page
+  const enrichedVessels = useMemo(() => {
+    // Simply return database vessels with their stored positions
+    // No automatic API calls to save credits
+    return vessels || [];
+  }, [vessels]);
 
   // Handle map ready callback
   const handleMapReady = useCallback((map) => {
@@ -80,7 +78,7 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, ten
 
     // Auto-fit bounds on initial load
     if (vessels && vessels.length > 0 && !hasUserInteractedRef.current && !initialBoundsSetRef.current) {
-      const bounds = [];
+      const bounds: [number, number][] = [];
       vessels.forEach((vessel) => {
         if (vessel.position) {
           const normalizedPos = normalizeVesselPosition({
@@ -196,7 +194,7 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, ten
           const center = [geofence.center.lon, geofence.center.lat];
           const radiusKm = geofence.radius;
           const points = 64;
-          const coordinates = [];
+          const coordinates: [number, number][] = [];
           
           for (let i = 0; i <= points; i++) {
             const angle = (i / points) * 2 * Math.PI;
@@ -393,12 +391,14 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, ten
       />
       
       {/* Vessel Layer - renders vessels with clustering */}
+      {/* Only shows database vessels with stored positions - no automatic API calls */}
       {mapRef.current && mapRef.current.isStyleLoaded() && (
         <VesselLayer
           map={mapRef.current}
-          vessels={zoneVessels || vessels} // Use zone vessels if available, fallback to props
+          vessels={enrichedVessels} // Database vessels with stored positions only
           tenantVessels={tenantVessels} // Pass tenant vessels for highlighting
           onVesselClick={handleVesselClick}
+          onVesselHover={() => {}} // Empty handler - not used in dashboard
         />
       )}
       

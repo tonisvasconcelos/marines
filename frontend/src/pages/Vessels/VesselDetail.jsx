@@ -6,7 +6,7 @@ import { api } from '../../utils/api';
 import Card from '../../components/ui/Card';
 import KpiCard from '../../components/ui/KpiCard';
 import MapView from '../../components/ais/MapView';
-import { FiSearch, FiCamera, FiTrash2, FiMapPin } from 'react-icons/fi';
+import { FiSearch, FiCamera, FiTrash2, FiMapPin, FiRefreshCw } from 'react-icons/fi';
 import styles from './VesselDetail.module.css';
 
 function VesselDetail() {
@@ -22,8 +22,8 @@ function VesselDetail() {
     queryFn: () => api.get(`/vessels/${id}`),
   });
 
-  // Fetch AIS position data
-  const { data: position } = useQuery({
+  // Fetch AIS position data (manual refresh only - no automatic polling to save credits)
+  const { data: position, refetch: refetchPosition, isFetching: isFetchingPosition } = useQuery({
     queryKey: ['vessel', id, 'position'],
     queryFn: async () => {
       try {
@@ -39,9 +39,21 @@ function VesselDetail() {
       }
     },
     enabled: !!vessel && (!!vessel.imo || !!vessel.mmsi),
-    refetchInterval: 60000,
+    // DISABLED: refetchInterval to save API credits - users must manually refresh
     retry: 1,
   });
+  
+  // Manual position refresh handler
+  const handleRefreshPosition = async () => {
+    try {
+      await refetchPosition();
+      // Invalidate related queries to update UI
+      queryClient.invalidateQueries(['vessel', id, 'position-history']);
+      queryClient.invalidateQueries(['vessel', id]);
+    } catch (error) {
+      console.error('Failed to refresh position:', error);
+    }
+  };
 
   // Fetch position history for trip calculations
   const { data: positionHistory } = useQuery({
@@ -268,15 +280,26 @@ function VesselDetail() {
               {aisVesselData.type} • IMO: {aisVesselData.imo} • MMSI: {aisVesselData.mmsi}
             </p>
           </div>
-          <button
-            className={styles.deleteButton}
-            onClick={handleDelete}
-            disabled={deleteMutation.isPending}
-            title={t('vessels.delete') || 'Delete vessel'}
-          >
-            <FiTrash2 />
-            {t('vessels.delete') || 'Delete'}
-          </button>
+          <div className={styles.headerActions}>
+            <button
+              className={styles.refreshButton}
+              onClick={handleRefreshPosition}
+              disabled={isFetchingPosition || !vessel || (!vessel.imo && !vessel.mmsi)}
+              title={t('vessels.refreshPosition') || 'Refresh vessel position from AIS'}
+            >
+              <FiRefreshCw style={isFetchingPosition ? { animation: 'spin 1s linear infinite' } : {}} />
+              {isFetchingPosition ? 'Refreshing...' : (t('vessels.refreshPosition') || 'Refresh Position')}
+            </button>
+            <button
+              className={styles.deleteButton}
+              onClick={handleDelete}
+              disabled={deleteMutation.isPending}
+              title={t('vessels.delete') || 'Delete vessel'}
+            >
+              <FiTrash2 />
+              {t('vessels.delete') || 'Delete'}
+            </button>
+          </div>
         </div>
       </div>
 
