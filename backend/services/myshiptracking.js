@@ -267,16 +267,28 @@ export async function fetchLatestPosition(identifier, { type = 'mmsi' } = {}) {
   });
   
   try {
-    const params = type === 'imo' ? { imo: identifier } : { mmsi: identifier };
-    // Try 'vessel' (singular) endpoint first, fallback to 'vessels' if needed
+    // Try path parameter format first: /vessel/{type}/{identifier}
     let response;
+    let endpoint = `vessel/${type}/${identifier}`;
+    
     try {
-      response = await makeRequest('vessel', params);
+      response = await makeRequest(endpoint, {});
     } catch (error) {
-      // If singular endpoint fails, try plural
+      // If path parameter fails, try query parameter format
       if (error.message.includes('not found') || error.message.includes('404')) {
-        console.log('[MyShipTracking] Trying plural endpoint...');
-        response = await makeRequest('vessels', params);
+        console.log('[MyShipTracking] Trying query parameter format...');
+        const params = type === 'imo' ? { imo: identifier } : { mmsi: identifier };
+        // Try 'vessel' (singular) endpoint first, fallback to 'vessels' if needed
+        try {
+          response = await makeRequest('vessel', params);
+        } catch (error2) {
+          if (error2.message.includes('not found') || error2.message.includes('404')) {
+            console.log('[MyShipTracking] Trying plural endpoint...');
+            response = await makeRequest('vessels', params);
+          } else {
+            throw error2;
+          }
+        }
       } else {
         throw error;
       }
