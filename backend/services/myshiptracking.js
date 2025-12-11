@@ -107,10 +107,10 @@ async function makeRequest(endpoint, params = {}) {
         errorMessage,
         endpoint,
         responseData: data,
-        apiKeyLength: authParams.apikey?.length || 0,
-        secretKeyLength: authParams.secret?.length || 0,
-        apiKeyFirstChars: authParams.apikey?.substring(0, 5) || 'N/A',
-        secretKeyFirstChars: authParams.secret?.substring(0, 3) || 'N/A',
+        apiKeyLength: authParams.apiKey?.length || 0,
+        secretKeyLength: authParams.secretKey?.length || 0,
+        apiKeyFirstChars: authParams.apiKey?.substring(0, 5) || 'N/A',
+        secretKeyFirstChars: authParams.secretKey?.substring(0, 3) || 'N/A',
       });
       
       // Handle specific error codes
@@ -268,7 +268,19 @@ export async function fetchLatestPosition(identifier, { type = 'mmsi' } = {}) {
   
   try {
     const params = type === 'imo' ? { imo: identifier } : { mmsi: identifier };
-    const response = await makeRequest('vessels', params);
+    // Try 'vessel' (singular) endpoint first, fallback to 'vessels' if needed
+    let response;
+    try {
+      response = await makeRequest('vessel', params);
+    } catch (error) {
+      // If singular endpoint fails, try plural
+      if (error.message.includes('not found') || error.message.includes('404')) {
+        console.log('[MyShipTracking] Trying plural endpoint...');
+        response = await makeRequest('vessels', params);
+      } else {
+        throw error;
+      }
+    }
     const position = normalizePosition(response);
     
     if (position) {
