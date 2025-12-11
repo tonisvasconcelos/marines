@@ -298,9 +298,9 @@ export async function fetchLatestPosition(identifier, { type = 'mmsi' } = {}) {
   });
   
   try {
-    // Use the correct endpoint: /vessel/status with query parameters
+    // Use the correct endpoint: /vessels with query parameters (mmsi or imo)
     const params = type === 'imo' ? { imo: identifier } : { mmsi: identifier };
-    const response = await makeRequest('vessel/status', params);
+    const response = await makeRequest('vessels', params);
     const position = normalizePosition(response);
     
     if (position) {
