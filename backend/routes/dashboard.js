@@ -135,9 +135,11 @@ router.get('/active-vessels', async (req, res) => {
   });
   
   // Normalize provider name (case-insensitive check)
-  // Helper function to get AIS position (tries stored position first, then AISStream, then mock)
+  // Helper function to get AIS position (tries stored position first, then fetches from API if needed)
+  // Fetches position from API only if vessel has MMSI/IMO and no stored position exists
+  // This ensures vessels are plotted on the map at least once
   const getVesselPosition = async (vessel) => {
-    // FIRST: Try to get latest stored position from database
+    // First: Try to get latest stored position from database
     try {
       const storedPosition = await vesselDb.getLatestPosition(vessel.id, tenantId);
       if (storedPosition && storedPosition.lat && storedPosition.lon) {
@@ -155,67 +157,58 @@ router.get('/active-vessels', async (req, res) => {
       }
     } catch (error) {
       console.error(`[getVesselPosition] Error fetching stored position for vessel ${vessel.id}:`, error);
-      // Continue to try AIS API
     }
     
-    // SECOND: Try MyShipTracking (supports both MMSI and IMO)
-    let identifier, type;
-    if (vessel.mmsi) {
-      identifier = String(vessel.mmsi);
-      type = 'mmsi';
-    } else if (vessel.imo) {
-      // Clean IMO - remove 'IMO' prefix if present
-      identifier = String(vessel.imo).replace(/^IMO/i, '').trim();
-      type = 'imo';
-    }
-    
-    if (identifier) {
+    // Second: If no stored position and vessel has MMSI/IMO, fetch from API once
+    // This ensures vessels appear on the map at least once
+    if ((vessel.mmsi || vessel.imo) && hasMyShipTrackingKey) {
       try {
-        console.log(`[getVesselPosition] Attempting to fetch AIS data from MyShipTracking for vessel ${vessel.id} (${vessel.name})`, {
-          identifier,
-          type,
-        });
+        console.log(`[getVesselPosition] No stored position, fetching from API for vessel ${vessel.id} (${vessel.name})`);
+        
+        // Clean IMO prefix if present
+        const cleanImo = vessel.imo ? String(vessel.imo).replace(/^IMO/i, '').trim() : null;
+        const identifier = vessel.mmsi || cleanImo;
+        const type = vessel.mmsi ? 'mmsi' : 'imo';
         
         const position = await fetchLatestPosition(identifier, { type });
         
-        if (position && position.lat !== undefined && position.lon !== undefined) {
-          const positionData = {
+        if (position && position.lat && position.lon) {
+          // Store the position in database for future use
+          try {
+            await vesselDb.storePositionHistory(vessel.id, tenantId, {
+              lat: position.lat,
+              lon: position.lon,
+              timestamp: position.timestamp || new Date().toISOString(),
+              sog: position.sog,
+              cog: position.cog,
+              heading: position.heading,
+              navStatus: position.navStatus,
+              source: 'myshiptracking',
+            });
+            console.log(`[getVesselPosition] Stored position for vessel ${vessel.id} (${vessel.name})`);
+          } catch (storeError) {
+            console.warn(`[getVesselPosition] Failed to store position for vessel ${vessel.id}:`, storeError.message);
+          }
+          
+          return {
             lat: position.lat,
             lon: position.lon,
-            timestamp: position.timestamp || new Date().toISOString(),
+            timestamp: position.timestamp,
             sog: position.sog,
             cog: position.cog,
             heading: position.heading,
             navStatus: position.navStatus,
             source: 'myshiptracking',
           };
-          
-          // Store position in history for future use
-          try {
-            await vesselDb.storePositionHistory(vessel.id, tenantId, positionData);
-          } catch (error) {
-            console.warn('Failed to store position history:', error.message);
-            // Don't fail if storage fails
-          }
-          
-          return positionData;
         }
-      } catch (error) {
-        console.warn(`[getVesselPosition] MyShipTracking API error for vessel ${vessel.id} (${vessel.name}):`, {
-          identifier,
-          type,
-          error: error.message,
-          errorType: error.constructor.name,
-        });
-        // Continue - will return null if no stored position exists
+      } catch (apiError) {
+        console.error(`[getVesselPosition] Error fetching position from API for vessel ${vessel.id}:`, apiError.message);
+        // Don't throw - return null so vessel is still returned but without position
       }
-    } else {
-      console.warn(`[getVesselPosition] Vessel ${vessel.id} (${vessel.name}) has no MMSI or IMO - cannot query AIS API`);
     }
     
-    // No position available from AIS API or stored data
-    // Return null to indicate position is unavailable
-    console.warn(`[getVesselPosition] No position data available for vessel ${vessel.id} (${vessel.name})`);
+    // No position available
+    console.log(`[getVesselPosition] No position available for vessel ${vessel.id} (${vessel.name})`);
     return null;
   };
   
