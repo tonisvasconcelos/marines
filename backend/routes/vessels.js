@@ -256,7 +256,8 @@ router.get('/:id/position', async (req, res) => {
       identifier = String(vessel.mmsi);
       type = 'mmsi';
     } else if (vessel.imo) {
-      identifier = String(vessel.imo);
+      // Clean IMO - remove 'IMO' prefix if present
+      identifier = String(vessel.imo).replace(/^IMO/i, '').trim();
       type = 'imo';
     }
     

@@ -158,7 +158,8 @@ router.get('/active-vessels', async (req, res) => {
       identifier = String(vessel.mmsi);
       type = 'mmsi';
     } else if (vessel.imo) {
-      identifier = String(vessel.imo);
+      // Clean IMO - remove 'IMO' prefix if present
+      identifier = String(vessel.imo).replace(/^IMO/i, '').trim();
       type = 'imo';
     }
     
@@ -248,12 +249,22 @@ router.get('/active-vessels', async (req, res) => {
           }
         } else if (portCall.status === 'PLANNED') {
           status = 'INBOUND';
-          // Get AIS position (real API or mock)
-          position = await getVesselPosition(vessel);
+          // Get AIS position (real API)
+          try {
+            position = await getVesselPosition(vessel);
+          } catch (error) {
+            console.error(`[Dashboard] Error getting position for vessel ${vessel.id}:`, error.message);
+            position = null;
+          }
         }
       } else {
-        // Vessel at sea - get AIS position (real API or mock)
-        position = await getVesselPosition(vessel);
+        // Vessel at sea - get AIS position (real API)
+        try {
+          position = await getVesselPosition(vessel);
+        } catch (error) {
+          console.error(`[Dashboard] Error getting position for vessel ${vessel.id}:`, error.message);
+          position = null;
+        }
       }
       
       // Detect status change and log it
@@ -353,6 +364,13 @@ router.get('/active-vessels', async (req, res) => {
   }
   
   res.json(activeVessels);
+  } catch (error) {
+    console.error('[Dashboard] Error in active-vessels endpoint:', error);
+    res.status(500).json({ 
+      message: 'Failed to fetch active vessels',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
 });
 
 // GET /api/dashboard/events - Get recent tactical events

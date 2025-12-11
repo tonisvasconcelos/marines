@@ -202,7 +202,8 @@ router.get('/vessels/:vesselId/last-position', async (req, res) => {
       identifier = String(vessel.mmsi);
       type = 'mmsi';
     } else if (vessel.imo) {
-      identifier = String(vessel.imo);
+      // Clean IMO - remove 'IMO' prefix if present
+      identifier = String(vessel.imo).replace(/^IMO/i, '').trim();
       type = 'imo';
     } else {
       return res.status(400).json({ 
@@ -277,7 +278,8 @@ router.get('/vessels/:vesselId/track', async (req, res) => {
       identifier = String(vessel.mmsi);
       type = 'mmsi';
     } else if (vessel.imo) {
-      identifier = String(vessel.imo);
+      // Clean IMO - remove 'IMO' prefix if present
+      identifier = String(vessel.imo).replace(/^IMO/i, '').trim();
       type = 'imo';
     } else {
       return res.status(400).json({ 
