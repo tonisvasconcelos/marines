@@ -7,7 +7,7 @@
  */
 
 const API_BASE_URL = process.env.MYSHIPTRACKING_API_URL || 'https://api.myshiptracking.com';
-const API_VERSION = 'v1';
+const API_VERSION = 'v2';
 
 /**
  * Get API key from environment variables
@@ -75,8 +75,7 @@ async function makeRequest(endpoint, params = {}) {
     const response = await fetch(url, { 
       headers: {
         'Accept': 'application/json',
-        'x-api-key': authParams.apiKey,
-        'x-api-secret': authParams.secretKey,
+        'Authorization': `Bearer ${authParams.apiKey}`,
       },
       method: 'GET',
     });
@@ -267,32 +266,9 @@ export async function fetchLatestPosition(identifier, { type = 'mmsi' } = {}) {
   });
   
   try {
-    // Try path parameter format first: /vessel/{type}/{identifier}
-    let response;
-    let endpoint = `vessel/${type}/${identifier}`;
-    
-    try {
-      response = await makeRequest(endpoint, {});
-    } catch (error) {
-      // If path parameter fails, try query parameter format
-      if (error.message.includes('not found') || error.message.includes('404')) {
-        console.log('[MyShipTracking] Trying query parameter format...');
-        const params = type === 'imo' ? { imo: identifier } : { mmsi: identifier };
-        // Try 'vessel' (singular) endpoint first, fallback to 'vessels' if needed
-        try {
-          response = await makeRequest('vessel', params);
-        } catch (error2) {
-          if (error2.message.includes('not found') || error2.message.includes('404')) {
-            console.log('[MyShipTracking] Trying plural endpoint...');
-            response = await makeRequest('vessels', params);
-          } else {
-            throw error2;
-          }
-        }
-      } else {
-        throw error;
-      }
-    }
+    // Use the correct endpoint: /vessel/status with query parameters
+    const params = type === 'imo' ? { imo: identifier } : { mmsi: identifier };
+    const response = await makeRequest('vessel/status', params);
     const position = normalizePosition(response);
     
     if (position) {
