@@ -8,6 +8,7 @@ import {
   fetchVesselsInZone,
 } from '../services/myshiptracking.js';
 import * as vesselDb from '../db/vessels.js';
+import { myshiptrackingLimiter } from '../middleware/externalApiRateLimit.js';
 
 const router = express.Router();
 
@@ -21,7 +22,7 @@ function getAisConfig() {
 }
 
 // GET /api/ais/vessel/last-position?mmsi=123 or ?imo=1234567
-router.get('/vessel/last-position', async (req, res) => {
+router.get('/vessel/last-position', myshiptrackingLimiter, validateVesselIdentifier, async (req, res) => {
   try {
     const { tenantId } = req;
     const { mmsi, imo } = req.query;
@@ -94,7 +95,7 @@ router.get('/vessel/last-position', async (req, res) => {
 });
 
 // GET /api/ais/vessel/track?mmsi=123&hours=72 or ?imo=1234567&hours=72
-router.get('/vessel/track', async (req, res) => {
+router.get('/vessel/track', myshiptrackingLimiter, async (req, res) => {
   try {
     const { mmsi, imo, hours } = req.query;
     const aisConfig = getAisConfig();
@@ -139,7 +140,7 @@ router.get('/vessel/track', async (req, res) => {
 });
 
 // GET /api/ais/zone?minlon=&maxlon=&minlat=&maxlat=
-router.get('/zone', async (req, res) => {
+router.get('/zone', myshiptrackingLimiter, validateZoneBoundsParam, async (req, res) => {
   try {
     const { minlon, maxlon, minlat, maxlat } = req.query;
     
@@ -201,7 +202,7 @@ router.get('/zone', async (req, res) => {
 });
 
 // GET /api/ais/vessels/:vesselId/last-position - Bridge endpoint that accepts vesselId
-router.get('/vessels/:vesselId/last-position', async (req, res) => {
+router.get('/vessels/:vesselId/last-position', myshiptrackingLimiter, async (req, res) => {
   try {
     const { tenantId } = req;
     const { vesselId } = req.params;
@@ -269,7 +270,7 @@ router.get('/vessels/:vesselId/last-position', async (req, res) => {
 });
 
 // GET /api/ais/vessels/:vesselId/track?hours=72 - Bridge endpoint that accepts vesselId
-router.get('/vessels/:vesselId/track', async (req, res) => {
+router.get('/vessels/:vesselId/track', myshiptrackingLimiter, async (req, res) => {
   try {
     const { tenantId } = req;
     const { vesselId } = req.params;

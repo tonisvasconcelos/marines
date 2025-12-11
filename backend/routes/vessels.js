@@ -8,6 +8,7 @@ import {
 import * as vesselDb from '../db/vessels.js';
 import * as operationLogsDb from '../db/operationLogs.js';
 import { fetchLatestPosition, fetchLatestPositionByMmsi, fetchLatestPositionByImo } from '../services/myshiptracking.js';
+import { myshiptrackingLimiter } from '../middleware/externalApiRateLimit.js';
 
 const router = express.Router();
 
@@ -27,7 +28,7 @@ router.get('/', async (req, res) => {
 });
 
 // GET /api/vessels/preview-position - Get position preview by IMO or MMSI (for form)
-router.get('/preview-position', async (req, res) => {
+router.get('/preview-position', myshiptrackingLimiter, validateVesselIdentifier, async (req, res) => {
   const { tenantId } = req;
   const { imo, mmsi } = req.query;
   
@@ -239,7 +240,7 @@ router.delete('/:id/customers/:customerId', (req, res) => {
 
 // GET /api/vessels/:id/position - Get current vessel position from AIS
 // This must come before /:id route to avoid route conflicts
-router.get('/:id/position', async (req, res) => {
+router.get('/:id/position', myshiptrackingLimiter, async (req, res) => {
   const { tenantId } = req;
   const { id } = req.params;
   

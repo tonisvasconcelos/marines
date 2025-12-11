@@ -223,3 +223,49 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 );
 CREATE INDEX IF NOT EXISTS idx_audit_logs_tenant_id ON audit_logs(tenant_id);
 
+-- Ports Table
+-- Stores port information from MyShipTracking and other sources
+CREATE TABLE IF NOT EXISTS ports (
+  id VARCHAR(255) PRIMARY KEY,
+  tenant_id VARCHAR(255) NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  port_id VARCHAR(255), -- MyShipTracking port_id
+  unlocode VARCHAR(10), -- UN/LOCODE (e.g., 'BRRIO', 'USNYC')
+  name TEXT NOT NULL,
+  country_code VARCHAR(5),
+  timezone VARCHAR(50),
+  lat DECIMAL(10, 8),
+  lon DECIMAL(11, 8),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_ports_tenant_id ON ports(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_ports_unlocode ON ports(unlocode);
+CREATE INDEX IF NOT EXISTS idx_ports_port_id ON ports(port_id);
+
+-- Fleets Table
+-- Stores fleet information for organizing vessels
+CREATE TABLE IF NOT EXISTS fleets (
+  id VARCHAR(255) PRIMARY KEY,
+  tenant_id VARCHAR(255) NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_fleets_tenant_id ON fleets(tenant_id);
+
+-- Fleet Vessels Junction Table
+-- Links vessels to fleets (many-to-many relationship)
+CREATE TABLE IF NOT EXISTS fleet_vessels (
+  id VARCHAR(255) PRIMARY KEY,
+  fleet_id VARCHAR(255) NOT NULL REFERENCES fleets(id) ON DELETE CASCADE,
+  vessel_id VARCHAR(255) NOT NULL REFERENCES vessels(id) ON DELETE CASCADE,
+  tenant_id VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(fleet_id, vessel_id, tenant_id),
+  FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_fleet_vessels_fleet_id ON fleet_vessels(fleet_id);
+CREATE INDEX IF NOT EXISTS idx_fleet_vessels_vessel_id ON fleet_vessels(vessel_id);
+CREATE INDEX IF NOT EXISTS idx_fleet_vessels_tenant_id ON fleet_vessels(tenant_id);
+

@@ -6,6 +6,19 @@
  * Supports both MMSI and IMO identifiers
  */
 
+import { 
+  getCached, 
+  setCached, 
+  getPositionCacheKey, 
+  getZoneCacheKey, 
+  getTrackCacheKey,
+  CACHE_TTL 
+} from './cache.js';
+import { 
+  createMyShipTrackingError, 
+  formatErrorResponse 
+} from './myshiptrackingErrors.js';
+
 const API_BASE_URL = process.env.MYSHIPTRACKING_API_URL || 'https://api.myshiptracking.com';
 const API_VERSION = 'v2';
 
@@ -104,15 +117,16 @@ async function makeRequest(endpoint, params = {}) {
     }
     
     if (!response.ok) {
-      const errorCode = data.error_code || data.errorCode || 'UNKNOWN';
-      const errorMessage = data.message || data.error || `API error: ${response.status}`;
+      // Create standardized error
+      const standardizedError = createMyShipTrackingError(data, response.status, endpoint);
       
       console.error('[MyShipTracking] API Error:', {
         status: response.status,
         statusText: response.statusText,
-        errorCode,
-        errorMessage,
+        errorCode: standardizedError.code,
+        errorMessage: standardizedError.message,
         endpoint,
+        userFacing: standardizedError.userFacing,
         responseData: data,
         apiKeyLength: authParams.apiKey?.length || 0,
         secretKeyLength: authParams.secretKey?.length || 0,
@@ -120,18 +134,17 @@ async function makeRequest(endpoint, params = {}) {
         secretKeyFirstChars: authParams.secretKey?.substring(0, 3) || 'N/A',
       });
       
-      // Handle specific error codes
-      if (response.status === 401) {
-        throw new Error('Invalid API credentials - Please verify MYSHIPTRACKING_API_KEY and MYSHIPTRACKING_SECRET_KEY are correct');
-      } else if (response.status === 402) {
-        throw new Error('Insufficient credits');
-      } else if (response.status === 404) {
-        throw new Error('Vessel not found');
-      } else if (response.status === 429) {
-        throw new Error('Rate limit exceeded');
-      }
+      // Create error object with standardized information
+      const error = new Error(standardizedError.message);
+      error.code = standardizedError.code;
+      error.status = standardizedError.status;
+      error.userFacing = standardizedError.userFacing;
+      error.description = standardizedError.description;
+      error.retryAfter = standardizedError.retryAfter;
+      error.endpoint = standardizedError.endpoint;
+      error.originalError = standardizedError.originalError;
       
-      throw new Error(errorMessage);
+      throw error;
     }
     
     return data;
@@ -267,6 +280,17 @@ export async function fetchLatestPosition(identifier, { type = 'mmsi' } = {}) {
     throw new Error('MYSHIPTRACKING_API_KEY and MYSHIPTRACKING_SECRET_KEY must be set');
   }
   
+  // Check cache first
+  const cacheKey = getPositionCacheKey(identifier, type);
+  const cached = getCached(cacheKey);
+  if (cached) {
+    console.log('[MyShipTracking] Using cached position:', {
+      identifier,
+      type,
+    });
+    return cached;
+  }
+  
   console.log('[MyShipTracking] Fetching position:', {
     identifier,
     type,
@@ -280,6 +304,9 @@ export async function fetchLatestPosition(identifier, { type = 'mmsi' } = {}) {
     const position = normalizePosition(response);
     
     if (position) {
+      // Cache the position for 60 seconds
+      setCached(cacheKey, position, CACHE_TTL.POSITION);
+      
       console.log('[MyShipTracking] Successfully fetched position:', {
         identifier,
         type,
@@ -339,6 +366,19 @@ export async function fetchTrack(identifier, { type = 'mmsi', hours = 24 } = {})
     throw new Error('MYSHIPTRACKING_API_KEY and MYSHIPTRACKING_SECRET_KEY must be set');
   }
   
+  // Check cache first
+  const cacheKey = getTrackCacheKey(identifier, type, hours);
+  const cached = getCached(cacheKey);
+  if (cached) {
+    console.log('[MyShipTracking] Using cached track:', {
+      identifier,
+      type,
+      hours,
+      pointsCount: cached.length,
+    });
+    return cached;
+  }
+  
   console.log('[MyShipTracking] Fetching track:', {
     identifier,
     type,
@@ -362,6 +402,9 @@ export async function fetchTrack(identifier, { type = 'mmsi', hours = 24 } = {})
     
     const response = await makeRequest('vessel/history', params);
     const track = normalizeTrack(response);
+    
+    // Cache the track for 15 minutes
+    setCached(cacheKey, track, CACHE_TTL.TRACK);
     
     console.log('[MyShipTracking] Successfully fetched track:', {
       identifier,
@@ -409,6 +452,17 @@ export async function fetchVesselsInZone(bounds, { max = 150 } = {}) {
     throw new Error('MYSHIPTRACKING_API_KEY and MYSHIPTRACKING_SECRET_KEY must be set');
   }
   
+  // Check cache first
+  const cacheKey = getZoneCacheKey(bounds);
+  const cached = getCached(cacheKey);
+  if (cached) {
+    console.log('[MyShipTracking] Using cached zone vessels:', {
+      bounds,
+      vesselsCount: cached.length,
+    });
+    return cached;
+  }
+  
   console.log('[MyShipTracking] Fetching vessels in zone:', {
     minlat: bounds.minlat,
     minlon: bounds.minlon,
@@ -430,6 +484,9 @@ export async function fetchVesselsInZone(bounds, { max = 150 } = {}) {
     
     // Limit results if needed
     const limitedVessels = vessels.slice(0, max);
+    
+    // Cache the zone results for 5 minutes
+    setCached(cacheKey, limitedVessels, CACHE_TTL.ZONE);
     
     console.log('[MyShipTracking] Successfully fetched vessels in zone:', {
       totalVessels: vessels.length,
