@@ -9,6 +9,7 @@ import {
 } from '../services/myshiptracking.js';
 import * as vesselDb from '../db/vessels.js';
 import { myshiptrackingLimiter } from '../middleware/externalApiRateLimit.js';
+import { validateVesselIdentifier, validateZoneBoundsParam } from '../middleware/validateMyShipTracking.js';
 
 const router = express.Router();
 
