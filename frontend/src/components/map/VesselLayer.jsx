@@ -177,15 +177,25 @@ export function VesselLayer({ map, vessels, tenantVessels = [], onVesselClick, o
         const vesselType = vessel.type || vessel.ship_type || vessel.vessel_type || '';
         
         // Check if this is a tenant vessel (match by MMSI or ID)
+        // Since all vessels passed to dashboard are already tenant-filtered, default to true
         const vesselMmsi = vessel.mmsi || positionData.mmsi;
         const vesselId = vessel.id;
-        const isTenantVessel = (vesselMmsi && tenantVesselSet.has(String(vesselMmsi))) ||
+        const isTenantVessel = tenantVesselSet.size === 0 || // If no tenant vessels specified, assume all are tenant
+                               (vesselMmsi && tenantVesselSet.has(String(vesselMmsi))) ||
                                (vesselId && tenantVesselSet.has(String(vesselId)));
         
         // Tenant vessels get colored markers, others get grey
         const color = isTenantVessel 
           ? getVesselTypeColor(vesselType, status)
           : '#94a3b8'; // Grey for non-tenant vessels
+        
+        console.log('[VesselLayer] Creating feature for vessel:', {
+          vesselId,
+          vesselName: vessel.name,
+          isTenantVessel,
+          color,
+          coordinates: [lon, lat],
+        });
 
         return {
           type: 'Feature',
@@ -215,6 +225,15 @@ export function VesselLayer({ map, vessels, tenantVessels = [], onVesselClick, o
         };
       })
       .filter((f) => f !== null);
+
+    console.log('[VesselLayer] GeoJSON created:', {
+      totalFeatures: features.length,
+      features: features.map(f => ({
+        id: f.properties.id,
+        name: f.properties.name,
+        coordinates: f.geometry.coordinates,
+      })),
+    });
 
     return {
       type: 'FeatureCollection',
