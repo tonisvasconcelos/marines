@@ -36,30 +36,8 @@ const PORT = parseInt(process.env.PORT, 10) || 3001;
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
 
-// CRITICAL: Handle OPTIONS requests FIRST, before any other middleware
-// This must be the very first handler to catch preflight requests
-app.options('*', (req, res) => {
-  const origin = req.headers.origin;
-  
-  console.log(`[CORS] OPTIONS preflight intercepted for: ${req.path}`);
-  console.log(`[CORS] Origin: ${origin}`);
-  
-  // Always set CORS headers for preflight - temporarily allow all origins for debugging
-  if (origin) {
-    res.header('Access-Control-Allow-Origin', origin);
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Max-Age', '86400');
-    console.log(`[CORS] Preflight headers set for origin: ${origin}`);
-  } else {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-  }
-  
-  return res.status(200).end();
-});
+// Note: CORS middleware will handle OPTIONS requests automatically
+// No need for manual OPTIONS handler - it can interfere with cors middleware
 
 // CORS configuration
 // Support multiple frontend URLs (for production, preview, and local dev)
@@ -108,14 +86,20 @@ const corsOptions = {
     }
     
     if (allowedOrigins.includes(origin)) {
-      console.log(`[CORS] Allowing origin: ${origin}`);
+      console.log(`[CORS] ✅ Allowing origin: ${origin}`);
       callback(null, true);
     } else {
-      console.warn(`[CORS] Blocked origin: ${origin}`);
+      console.warn(`[CORS] ❌ Blocked origin: ${origin}`);
       console.warn(`[CORS] Allowed origins: ${allowedOrigins.join(', ')}`);
       // In production, be strict; in dev, be more permissive
       if (process.env.NODE_ENV === 'production') {
-        callback(new Error('Not allowed by CORS'));
+        // In production, still allow if it's a Vercel domain (for preview deployments)
+        if (origin.includes('.vercel.app')) {
+          console.warn(`[CORS] Production mode - allowing Vercel domain: ${origin}`);
+          callback(null, true);
+        } else {
+          callback(new Error('Not allowed by CORS'));
+        }
       } else {
         // Allow in development for easier debugging
         console.warn('[CORS] Development mode - allowing anyway');
