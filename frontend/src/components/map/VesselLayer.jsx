@@ -72,14 +72,22 @@ export function VesselLayer({ map, vessels, tenantVessels = [], onVesselClick, o
       };
     }
 
-    if (import.meta.env.DEV) {
-      console.log('[VesselLayer] Processing vessels:', {
-        totalVessels: vessels.length,
-        vesselsWithPosition: vessels.filter(v => v.position && v.position.lat && v.position.lon).length,
-        sampleVessel: vessels[0],
-        samplePosition: vessels[0]?.position,
-      });
-    }
+    // Always log in production to diagnose issues
+    console.log('[VesselLayer] Processing vessels:', {
+      totalVessels: vessels.length,
+      vesselsWithPosition: vessels.filter(v => {
+        const pos = v.position || v;
+        return pos && (pos.lat != null || pos.latitude != null) && (pos.lon != null || pos.longitude != null || pos.lng != null);
+      }).length,
+      sampleVessel: vessels[0],
+      samplePosition: vessels[0]?.position,
+      allVessels: vessels.map(v => ({
+        id: v.id,
+        name: v.name,
+        hasPosition: !!v.position,
+        position: v.position,
+      })),
+    });
 
     const features = vessels
       .map((vessel) => {
@@ -87,23 +95,27 @@ export function VesselLayer({ map, vessels, tenantVessels = [], onVesselClick, o
         const positionData = vessel.position || vessel;
         
         // Debug logging for vessels without positions
-        if (!positionData || (!positionData.lat && !positionData.lon && !vessel.lat && !vessel.lng)) {
-          if (import.meta.env.DEV) {
-            console.warn('[VesselLayer] Skipping vessel without position:', {
-              vesselId: vessel.id,
-              vesselName: vessel.name,
-              hasPositionObject: !!vessel.position,
-              positionData,
-            });
-          }
+        // Check for lat/lon in various formats
+        const hasLat = positionData?.lat != null || positionData?.latitude != null || vessel.lat != null;
+        const hasLon = positionData?.lon != null || positionData?.longitude != null || positionData?.lng != null || vessel.lon != null || vessel.lng != null;
+        
+        if (!positionData || (!hasLat || !hasLon)) {
+          console.warn('[VesselLayer] Skipping vessel without position:', {
+            vesselId: vessel.id,
+            vesselName: vessel.name,
+            hasPositionObject: !!vessel.position,
+            positionData,
+            hasLat,
+            hasLon,
+          });
           return null;
         }
 
         // Normalize coordinates (preserves full precision)
-        // Handle both lng and lon for compatibility
+        // Handle both lng and lon for compatibility, and various field names
         const normalizedPos = normalizeVesselPosition({
-          lat: positionData.lat || vessel.lat,
-          lon: positionData.lon || positionData.lng || vessel.lon || vessel.lng,
+          lat: positionData.lat || positionData.latitude || vessel.lat,
+          lon: positionData.lon || positionData.longitude || positionData.lng || vessel.lon || vessel.lng,
           vesselName: vessel.name,
         });
 

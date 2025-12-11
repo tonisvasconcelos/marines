@@ -45,18 +45,25 @@ function Dashboard() {
     },
   });
 
-  // Debug logging
-  if (import.meta.env.DEV) {
-    console.log('[Dashboard] Active vessels:', {
-      activeVessels,
-      isLoading: vesselsLoading,
-      error: vesselsError,
-      count: activeVessels?.length,
-      vesselsWithPositions: activeVessels?.filter(v => v.position && v.position.lat && v.position.lon).length,
-      sampleVessel: activeVessels?.[0],
-      samplePosition: activeVessels?.[0]?.position,
-    });
-  }
+  // Always log to diagnose issues
+  console.log('[Dashboard] Active vessels:', {
+    activeVessels,
+    isLoading: vesselsLoading,
+    error: vesselsError,
+    count: activeVessels?.length,
+    vesselsWithPositions: activeVessels?.filter(v => {
+      const pos = v.position;
+      return pos && (pos.lat != null || pos.latitude != null) && (pos.lon != null || pos.longitude != null || pos.lng != null);
+    }).length,
+    sampleVessel: activeVessels?.[0],
+    samplePosition: activeVessels?.[0]?.position,
+    allVesselsWithPositions: activeVessels?.map(v => ({
+      id: v.id,
+      name: v.name,
+      hasPosition: !!v.position,
+      position: v.position,
+    })),
+  });
 
   const { data: events, isLoading: eventsLoading } = useQuery({
     queryKey: ['dashboard', 'events'],
