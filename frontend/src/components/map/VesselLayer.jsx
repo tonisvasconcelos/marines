@@ -262,18 +262,27 @@ export function VesselLayer({ map, vessels, tenantVessels = [], onVesselClick, o
       // Continue anyway - layers might not exist yet
     }
 
-    // Add vessel source
-    map.addSource(sourceId, {
-      type: 'geojson',
-      data: vesselGeoJSON,
-      cluster: true, // Enable clustering
-      clusterMaxZoom: 14, // Max zoom to cluster points on
-      clusterRadius: 50, // Radius of each cluster when clustering points
-      clusterProperties: {
-        // Keep separate counts for different vessel types
-        sum: ['+', ['get', 'point_count']],
-      },
-    });
+    // Add or update vessel source
+    const existingSource = map.getSource(sourceId);
+    if (existingSource) {
+      // Update existing source
+      console.log('[VesselLayer] Updating existing source with', vesselGeoJSON.features.length, 'features');
+      existingSource.setData(vesselGeoJSON);
+    } else {
+      // Add new source
+      console.log('[VesselLayer] Adding new source with', vesselGeoJSON.features.length, 'features');
+      map.addSource(sourceId, {
+        type: 'geojson',
+        data: vesselGeoJSON,
+        cluster: true, // Enable clustering
+        clusterMaxZoom: 14, // Max zoom to cluster points on
+        clusterRadius: 50, // Radius of each cluster when clustering points
+        clusterProperties: {
+          // Keep separate counts for different vessel types
+          sum: ['+', ['get', 'point_count']],
+        },
+      });
+    }
 
     // Add cluster circles
     map.addLayer({
