@@ -210,108 +210,122 @@ router.get('/active-vessels', async (req, res) => {
   // Track previous statuses for status change detection
   const previousStatuses = new Map();
   
-  const activeVessels = await Promise.all(
-    vessels.map(async (vessel) => {
-      const portCall = portCalls.find((pc) => pc.vesselId === vessel.id && 
-        (pc.status === 'IN_PROGRESS' || pc.status === 'PLANNED'));
-      
-      // Get previous status from stored position or default
-      const previousPosition = await vesselDb.getLatestPosition(vessel.id, tenantId).catch(() => null);
-      const previousStatus = previousPosition?.navStatus || 'AT_SEA';
-      previousStatuses.set(vessel.id, previousStatus);
-      
-      let position = null;
-      let status = 'AT_SEA';
-      
-      if (portCall) {
-        if (portCall.status === 'IN_PROGRESS') {
-          status = 'IN_PORT';
-          // Get position from port or ops site - use port coordinates if available, otherwise maritime position
-          if (portCall.port?.coordinates) {
-            position = {
-              lat: portCall.port.coordinates.lat,
-              lon: portCall.port.coordinates.lon,
-              timestamp: new Date().toISOString(),
-            };
-          } else {
-            // Use a position in Guanabara Bay (in port area)
-            position = {
-              lat: -22.90 + (Math.random() - 0.5) * 0.03, // Inner bay area
-              lon: -43.13 + (Math.random() - 0.5) * 0.03,
-              timestamp: new Date().toISOString(),
-            };
-          }
-        } else if (portCall.status === 'PLANNED') {
-          status = 'INBOUND';
-          // Get AIS position (real API)
-          try {
-            position = await getVesselPosition(vessel);
-          } catch (error) {
-            console.error(`[Dashboard] Error getting position for vessel ${vessel.id}:`, error.message);
-            position = null;
-          }
+  // CRITICAL: Fetch positions for ALL tenant vessels to ensure they appear on the map
+  // Process vessels sequentially with a small delay to avoid rate limiting
+  const activeVessels = [];
+  for (let i = 0; i < vessels.length; i++) {
+    const vessel = vessels[i];
+    
+    // Add small delay between API calls to respect rate limits (except for first vessel)
+    if (i > 0 && (vessel.mmsi || vessel.imo)) {
+      await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay between calls
+    }
+    
+    const portCall = portCalls.find((pc) => pc.vesselId === vessel.id && 
+      (pc.status === 'IN_PROGRESS' || pc.status === 'PLANNED'));
+    
+    // Get previous status from stored position or default
+    const previousPosition = await vesselDb.getLatestPosition(vessel.id, tenantId).catch(() => null);
+    const previousStatus = previousPosition?.navStatus || 'AT_SEA';
+    previousStatuses.set(vessel.id, previousStatus);
+    
+    let position = null;
+    let status = 'AT_SEA';
+    
+    if (portCall) {
+      if (portCall.status === 'IN_PROGRESS') {
+        status = 'IN_PORT';
+        // Get position from port or ops site - use port coordinates if available, otherwise maritime position
+        if (portCall.port?.coordinates) {
+          position = {
+            lat: portCall.port.coordinates.lat,
+            lon: portCall.port.coordinates.lon,
+            timestamp: new Date().toISOString(),
+          };
+        } else {
+          // Use a position in Guanabara Bay (in port area)
+          position = {
+            lat: -22.90 + (Math.random() - 0.5) * 0.03, // Inner bay area
+            lon: -43.13 + (Math.random() - 0.5) * 0.03,
+            timestamp: new Date().toISOString(),
+          };
         }
-      } else {
-        // Vessel at sea - get AIS position (real API)
-        // CRITICAL: Always attempt to fetch position for all vessels from database
+      } else if (portCall.status === 'PLANNED') {
+        status = 'INBOUND';
+        // Get AIS position (real API)
         try {
           position = await getVesselPosition(vessel);
           if (!position) {
-            console.warn(`[Dashboard] No position available for vessel ${vessel.id} (${vessel.name}) - MMSI: ${vessel.mmsi}, IMO: ${vessel.imo}`);
+            console.warn(`[Dashboard] No position for INBOUND vessel ${vessel.id} (${vessel.name}) - MMSI: ${vessel.mmsi}, IMO: ${vessel.imo}`);
           }
         } catch (error) {
-          console.error(`[Dashboard] Error getting position for vessel ${vessel.id} (${vessel.name}):`, {
-            error: error.message,
-            mmsi: vessel.mmsi,
-            imo: vessel.imo,
-            hasIdentifier: !!(vessel.mmsi || vessel.imo),
-          });
+          console.error(`[Dashboard] Error getting position for INBOUND vessel ${vessel.id}:`, error.message);
           position = null;
         }
       }
-      
-      // Detect status change and log it
-      // Only create log if vessel exists in database (skip for mock vessels)
-      if (position && previousStatus && previousStatus !== status) {
-        try {
-          // Check if vessel exists in database before creating log
-          const vesselExists = await vesselDb.getVesselById(vessel.id, tenantId);
-          if (vesselExists) {
-            await operationLogsDb.createOperationLog({
-              tenantId,
-              vesselId: vessel.id,
-              eventType: 'STATUS_CHANGE',
-              description: `Vessel status changed from ${previousStatus} to ${status}`,
-              positionLat: position.lat,
-              positionLon: position.lon,
-              previousStatus,
-              currentStatus: status,
-            });
-          }
-        } catch (logError) {
-          // Silently skip logging for mock vessels or database errors
-          // Foreign key errors are expected for mock vessels that don't exist in DB
-          if (!logError.message?.includes('foreign key constraint')) {
-            console.error('Failed to create operation log for status change:', logError);
-          }
+    } else {
+      // Vessel at sea - get AIS position (real API)
+      // CRITICAL: Always attempt to fetch position for all vessels from database
+      try {
+        position = await getVesselPosition(vessel);
+        if (!position) {
+          console.warn(`[Dashboard] ⚠️ No position available for vessel ${vessel.id} (${vessel.name}) - MMSI: ${vessel.mmsi}, IMO: ${vessel.imo}, hasIdentifier: ${!!(vessel.mmsi || vessel.imo)}, hasApiKey: ${hasAisApiKey}`);
+        } else {
+          console.log(`[Dashboard] ✅ Position fetched for vessel ${vessel.id} (${vessel.name}): ${position.lat.toFixed(4)}, ${position.lon.toFixed(4)}`);
+        }
+      } catch (error) {
+        console.error(`[Dashboard] ❌ Error getting position for vessel ${vessel.id} (${vessel.name}):`, {
+          error: error.message,
+          mmsi: vessel.mmsi,
+          imo: vessel.imo,
+          hasIdentifier: !!(vessel.mmsi || vessel.imo),
+          hasApiKey: hasAisApiKey,
+        });
+        position = null;
+      }
+    }
+    
+    // Detect status change and log it
+    // Only create log if vessel exists in database (skip for mock vessels)
+    if (position && previousStatus && previousStatus !== status) {
+      try {
+        // Check if vessel exists in database before creating log
+        const vesselExists = await vesselDb.getVesselById(vessel.id, tenantId);
+        if (vesselExists) {
+          await operationLogsDb.createOperationLog({
+            tenantId,
+            vesselId: vessel.id,
+            eventType: 'STATUS_CHANGE',
+            description: `Vessel status changed from ${previousStatus} to ${status}`,
+            positionLat: position.lat,
+            positionLon: position.lon,
+            previousStatus,
+            currentStatus: status,
+          });
+        }
+      } catch (logError) {
+        // Silently skip logging for mock vessels or database errors
+        // Foreign key errors are expected for mock vessels that don't exist in DB
+        if (!logError.message?.includes('foreign key constraint')) {
+          console.error('Failed to create operation log for status change:', logError);
         }
       }
-      
-      return {
-        ...vessel,
-        position,
-        status,
-        portCallId: portCall?.id,
-        portCall: portCall ? {
-          id: portCall.id,
-          port: portCall.port,
-          eta: portCall.eta,
-          etd: portCall.etd,
-          status: portCall.status,
-        } : null,
-      };
-    })
-  );
+    }
+    
+    activeVessels.push({
+      ...vessel,
+      position,
+      status,
+      portCallId: portCall?.id,
+      portCall: portCall ? {
+        id: portCall.id,
+        port: portCall.port,
+        eta: portCall.eta,
+        etd: portCall.etd,
+        status: portCall.status,
+      } : null,
+    });
+  }
   
   // Check geofence entries for active vessels
   const opsSites = getMockOpsSites(tenantId);
@@ -369,7 +383,21 @@ router.get('/active-vessels', async (req, res) => {
   // IMPORTANT: Return ALL vessels from database, even if position fetch failed
   // This ensures users can see all their vessels on the dashboard
   // Vessels without positions will have position: null, which the frontend can handle
-  console.log(`[dashboard/active-vessels] Returning ${activeVessels.length} vessels (${activeVessels.filter(v => v.position).length} with positions)`);
+  const vesselsWithPositions = activeVessels.filter(v => v.position && v.position.lat && v.position.lon);
+  const vesselsWithoutPositions = activeVessels.filter(v => !v.position || !v.position.lat || !v.position.lon);
+  
+  console.log(`[dashboard/active-vessels] Summary:`, {
+    totalVessels: activeVessels.length,
+    withPositions: vesselsWithPositions.length,
+    withoutPositions: vesselsWithoutPositions.length,
+    vesselsWithoutPositions: vesselsWithoutPositions.map(v => ({
+      id: v.id,
+      name: v.name,
+      mmsi: v.mmsi,
+      imo: v.imo,
+      hasIdentifier: !!(v.mmsi || v.imo),
+    })),
+  });
   
   res.json(activeVessels);
   } catch (error) {
