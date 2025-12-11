@@ -176,8 +176,27 @@ router.get('/zone', async (req, res) => {
     const results = await fetchVesselsInZone(parsed);
     res.json(results);
   } catch (error) {
-    console.error('AIS zone error:', error);
-    res.status(500).json({ message: error.message || 'Failed to fetch vessels in zone' });
+    console.error('[AIS Zone] Error fetching vessels in zone:', {
+      error: error.message,
+      errorType: error.constructor.name,
+      apiKeyConfigured: !!process.env.MYSHIPTRACKING_API_KEY,
+      secretKeyConfigured: !!process.env.MYSHIPTRACKING_SECRET_KEY,
+    });
+    
+    // Provide more helpful error messages
+    if (error.message.includes('not configured') || error.message.includes('must be set')) {
+      return res.status(500).json({ 
+        message: 'AIS API is not properly configured. Please contact administrator to set MYSHIPTRACKING_API_KEY and MYSHIPTRACKING_SECRET_KEY environment variables.' 
+      });
+    } else if (error.message.includes('Invalid API credentials')) {
+      return res.status(401).json({ 
+        message: 'Invalid AIS API credentials. Please verify MYSHIPTRACKING_API_KEY and MYSHIPTRACKING_SECRET_KEY are correct.' 
+      });
+    }
+    
+    res.status(500).json({ 
+      message: error.message || 'Failed to fetch vessels in zone' 
+    });
   }
 });
 

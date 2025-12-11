@@ -381,9 +381,13 @@ export async function fetchTrackByMmsi(mmsi, { hours = 24 } = {}) {
  */
 export async function fetchVesselsInZone(bounds, { max = 150 } = {}) {
   const apiKey = getApiKey();
-  if (!apiKey) {
-    console.error('[MyShipTracking] MYSHIPTRACKING_API_KEY is not set');
-    throw new Error('MYSHIPTRACKING_API_KEY is not configured');
+  const secretKey = getSecretKey();
+  if (!apiKey || !secretKey) {
+    console.error('[MyShipTracking] API credentials not configured:', {
+      hasApiKey: !!apiKey,
+      hasSecretKey: !!secretKey,
+    });
+    throw new Error('MYSHIPTRACKING_API_KEY and MYSHIPTRACKING_SECRET_KEY must be set');
   }
   
   console.log('[MyShipTracking] Fetching vessels in zone:', {
