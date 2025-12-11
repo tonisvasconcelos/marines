@@ -31,40 +31,55 @@ function sanitizeUser(user) {
 router.post('/login', async (req, res) => {
   const { email, password } = req.body || {};
 
+  console.log('[Auth] Login attempt:', { email, hasPassword: !!password, passwordLength: password?.length });
+
   if (!email || !password) {
+    console.log('[Auth] Missing email or password');
     return res.status(400).json({ message: 'Email and password are required' });
   }
 
   if (!emailRegex.test(email)) {
+    console.log('[Auth] Invalid email format:', email);
     return res.status(400).json({ message: 'Email is invalid' });
   }
 
   const users = getMockUsers();
+  console.log('[Auth] Available users:', users.map(u => ({ email: u.email, hasPasswordHash: !!u.passwordHash })));
+  
   const user = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+  console.log('[Auth] Found user:', user ? { id: user.id, email: user.email, hasPasswordHash: !!user.passwordHash } : null);
 
   if (!user) {
+    console.log('[Auth] User not found for email:', email);
     return res.status(401).json({ message: 'Invalid credentials' });
   }
 
   const passwordHash = user.passwordHash || user.password;
+  console.log('[Auth] Password hash check:', { hasPasswordHash: !!passwordHash, hashLength: passwordHash?.length });
   
   // Validate passwordHash exists before attempting comparison
   if (!passwordHash) {
+    console.log('[Auth] No password hash found for user');
     return res.status(401).json({ message: 'Invalid credentials' });
   }
 
   let validPassword = false;
   try {
+    console.log('[Auth] Comparing password with bcrypt...');
     validPassword = await bcrypt.compare(password, passwordHash);
+    console.log('[Auth] Password comparison result:', validPassword);
   } catch (error) {
     // Handle bcrypt errors (e.g., invalid hash format) as authentication failures
-    console.error('Password comparison error:', error.message);
+    console.error('[Auth] Password comparison error:', error.message, error.stack);
     return res.status(401).json({ message: 'Invalid credentials' });
   }
 
   if (!validPassword) {
+    console.log('[Auth] Password does not match');
     return res.status(401).json({ message: 'Invalid credentials' });
   }
+
+  console.log('[Auth] Login successful for user:', user.id);
 
   const basePayload = {
     userId: user.id,

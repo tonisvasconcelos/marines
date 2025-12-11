@@ -19,7 +19,7 @@ export function getMockUsers() {
     {
       id: 'user-1',
       email: 'demo@marines.app',
-      passwordHash: '$2a$10$RxWbhMNJrpFY.mQCgisLCONxJxQ/sfXspX0SujuZKTVJZNRQ0bEFy', // bcrypt hash for demo123
+      passwordHash: '$2a$10$0fonpEZ38sZgafoISe3OWuKnJr59WUHWg6YG3Q.k/8b/Y.GdmTKJC', // bcrypt hash for demo123
       name: 'Demo User',
       tenantId: 'tenant-1',
       role: 'ADMIN',
