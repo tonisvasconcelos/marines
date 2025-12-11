@@ -141,8 +141,11 @@ router.get('/vessel/track', myshiptrackingLimiter, async (req, res) => {
 });
 
 // GET /api/ais/zone?minlon=&maxlon=&minlat=&maxlat=
+// CRITICAL: Only returns vessels that match tenant's registered vessels (by MMSI/IMO)
+// This prevents consuming API credits on vessels not owned by the tenant
 router.get('/zone', myshiptrackingLimiter, validateZoneBoundsParam, async (req, res) => {
   try {
+    const { tenantId } = req;
     const { minlon, maxlon, minlat, maxlat } = req.query;
     
     // Validate all parameters are present and non-empty
@@ -175,8 +178,39 @@ router.get('/zone', myshiptrackingLimiter, validateZoneBoundsParam, async (req, 
       });
     }
     
-    const results = await fetchVesselsInZone(parsed);
-    res.json(results);
+    // CRITICAL: Get tenant vessels first to filter results
+    // Only fetch positions for vessels registered in the tenant's database
+    const tenantVessels = await vesselDb.getVessels(tenantId);
+    const tenantMmsis = new Set(tenantVessels.map(v => String(v.mmsi)).filter(Boolean));
+    const tenantImos = new Set(tenantVessels.map(v => {
+      const imo = v.imo ? String(v.imo).replace(/^IMO/i, '').trim() : null;
+      return imo;
+    }).filter(Boolean));
+    
+    console.log(`[AIS Zone] Filtering zone results for tenant ${tenantId}:`, {
+      tenantVesselCount: tenantVessels.length,
+      tenantMmsiCount: tenantMmsis.size,
+      tenantImoCount: tenantImos.size,
+      bounds: parsed,
+    });
+    
+    // Fetch vessels in zone from AIS API
+    const allVesselsInZone = await fetchVesselsInZone(parsed);
+    
+    // CRITICAL: Filter to only return vessels that match tenant's registered vessels
+    const filteredResults = allVesselsInZone.filter(vessel => {
+      const vesselMmsi = vessel.mmsi ? String(vessel.mmsi) : null;
+      const vesselImo = vessel.imo ? String(vessel.imo).replace(/^IMO/i, '').trim() : null;
+      
+      const matches = (vesselMmsi && tenantMmsis.has(vesselMmsi)) || 
+                     (vesselImo && tenantImos.has(vesselImo));
+      
+      return matches;
+    });
+    
+    console.log(`[AIS Zone] Filtered ${allVesselsInZone.length} vessels to ${filteredResults.length} tenant vessels`);
+    
+    res.json(filteredResults);
   } catch (error) {
     console.error('[AIS Zone] Error fetching vessels in zone:', {
       error: error.message,
