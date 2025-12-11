@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { useI18n } from '../utils/useI18n';
 import { api } from '../utils/api';
 import Card from '../components/ui/Card';
@@ -7,6 +8,7 @@ import styles from './OpsSites.module.css';
 
 function OpsSites() {
   const { t } = useI18n();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState(null);
   const [isAdding, setIsAdding] = useState(false);
@@ -311,10 +313,10 @@ function OpsSites() {
                     <td>
                       <button
                         className={styles.viewPortCallsButton}
-                        onClick={() => setViewingPortCallsId(viewingPortCallsId === site.id ? null : site.id)}
+                        onClick={() => navigate(`/ops-sites/${site.id}/port-calls`)}
                         disabled={!site.latitude || !site.longitude}
                       >
-                        {viewingPortCallsId === site.id ? 'Hide' : 'View'} Port Calls
+                        View Port Calls
                       </button>
                     </td>
                   </tr>

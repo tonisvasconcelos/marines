@@ -49,10 +49,54 @@ router.get('/:id', (req, res) => {
   res.json(portCall);
 });
 
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const { tenantId } = req;
-  // In production, create port call in DB
-  res.status(201).json({ message: 'Port call created', id: 'new-pc-id' });
+  const { vesselId, portId, eta, etd, status = 'PLANNED', localReferenceType, localReferenceNumber } = req.body;
+  
+  try {
+    // Validate required fields
+    if (!vesselId) {
+      return res.status(400).json({ message: 'vesselId is required' });
+    }
+    
+    // Generate port call ID
+    const portCallId = `portcall-${Date.now()}-${crypto.randomUUID().substring(0, 8)}`;
+    
+    // Insert into database
+    const { query } = await import('../db/connection.js');
+    await query(
+      `INSERT INTO port_calls (
+        id, tenant_id, vessel_id, port_id, status, eta, etd,
+        local_reference_type, local_reference_number, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      [portCallId, tenantId, vesselId, portId || null, status, eta || null, etd || null, localReferenceType || null, localReferenceNumber || null]
+    );
+    
+    // Fetch the created port call
+    const result = await query(
+      'SELECT * FROM port_calls WHERE id = $1 AND tenant_id = $2',
+      [portCallId, tenantId]
+    );
+    
+    const portCall = result.rows[0];
+    
+    res.status(201).json({
+      id: portCall.id,
+      tenantId: portCall.tenant_id,
+      vesselId: portCall.vessel_id,
+      portId: portCall.port_id,
+      status: portCall.status,
+      eta: portCall.eta,
+      etd: portCall.etd,
+      localReferenceType: portCall.local_reference_type,
+      localReferenceNumber: portCall.local_reference_number,
+      createdAt: portCall.created_at,
+      updatedAt: portCall.updated_at,
+    });
+  } catch (error) {
+    console.error('[Port Calls] Error creating port call:', error);
+    res.status(500).json({ message: 'Failed to create port call', error: error.message });
+  }
 });
 
 router.put('/:id', (req, res) => {

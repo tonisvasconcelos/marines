@@ -237,34 +237,42 @@ function normalizeTrack(response) {
 /**
  * Normalize MyShipTracking zone vessels response to app format
  */
+/**
+ * Normalize MyShipTracking zone vessels response to app format
+ * API v2 response structure: { status: "success", data: [{ vessel_name, mmsi, imo, lat, lng, course, speed, nav_status, received, ... }] }
+ * Reference: https://api.myshiptracking.com/docs/vessels-in-zone
+ */
 function normalizeZoneVessels(response) {
-  const vessels = response.data?.vessels || response.vessels || response.data || [];
+  // API returns data as an array directly: { status: "success", data: [...] }
+  const vessels = response.data || response.vessels || [];
   
   if (!Array.isArray(vessels)) {
     return [];
   }
   
   return vessels.map((vessel) => {
-    const lat = vessel.latitude || vessel.lat;
-    const lon = vessel.longitude || vessel.lon || vessel.lng;
+    // API uses 'lat' and 'lng' (not 'lon')
+    const lat = vessel.lat;
+    const lng = vessel.lng;
     
-    if (lat === undefined || lon === undefined) {
+    if (lat === undefined || lng === undefined || lat === null || lng === null) {
       return null;
     }
     
     return {
       mmsi: String(vessel.mmsi || ''),
       imo: vessel.imo ? String(vessel.imo) : undefined,
-      name: vessel.name || vessel.vessel_name || vessel.ship_name,
-      callSign: vessel.call_sign || vessel.callSign,
+      name: vessel.vessel_name || vessel.name,
+      callSign: vessel.callsign || vessel.call_sign,
       lat: Number(lat),
-      lon: Number(lon),
-      lng: Number(lon), // Also provide lng for compatibility
-      cog: vessel.cog !== undefined ? Number(vessel.cog) : undefined,
-      sog: vessel.sog !== undefined ? Number(vessel.sog) : undefined,
+      lon: Number(lng), // API uses 'lng', we normalize to 'lon' for internal use
+      lng: Number(lng), // Also provide lng for compatibility
+      cog: vessel.course !== undefined ? Number(vessel.course) : undefined,
+      sog: vessel.speed !== undefined ? Number(vessel.speed) : undefined,
       heading: vessel.heading !== undefined ? Number(vessel.heading) : undefined,
       navStatus: vessel.nav_status || vessel.navigational_status,
-      timestamp: vessel.timestamp || vessel.last_position_time || new Date().toISOString(),
+      timestamp: vessel.received || vessel.timestamp || new Date().toISOString(), // API uses 'received' field
+      vesselType: vessel.vessel_type || vessel.vtype,
     };
   }).filter(Boolean);
 }
@@ -480,6 +488,8 @@ export async function fetchVesselsInZone(bounds, { max = 150 } = {}) {
   });
   
   try {
+    // Use the correct endpoint: /vessel/zone with bounding box parameters
+    // API docs: https://api.myshiptracking.com/docs/vessels-in-zone
     const params = {
       minlat: Number(bounds.minlat),
       minlon: Number(bounds.minlon),
@@ -487,7 +497,7 @@ export async function fetchVesselsInZone(bounds, { max = 150 } = {}) {
       maxlon: Number(bounds.maxlon),
     };
     
-    const response = await makeRequest('vessels/in-zone', params);
+    const response = await makeRequest('vessel/zone', params);
     const vessels = normalizeZoneVessels(response);
     
     // Limit results if needed
@@ -509,4 +519,294 @@ export async function fetchVesselsInZone(bounds, { max = 150 } = {}) {
     });
     throw error;
   }
+}
+
+/**
+ * Fetch port estimates (expected arrivals) for a specific port
+ * API docs: https://api.myshiptracking.com/docs/port-estimate-arrivals
+ * @param {string|number} portId - Port ID (integer) or UN/LOCODE
+ * @param {object} options - Options object
+ * @param {boolean} options.useUnloco - If true, use unloco parameter instead of port_id
+ * @returns {Promise<Array>} Array of port estimate objects
+ */
+export async function fetchPortEstimates(portId, { useUnloco = false } = {}) {
+  const apiKey = getApiKey();
+  const secretKey = getSecretKey();
+  if (!apiKey || !secretKey) {
+    console.error('[MyShipTracking] API credentials not configured:', {
+      hasApiKey: !!apiKey,
+      hasSecretKey: !!secretKey,
+    });
+    throw new Error('MYSHIPTRACKING_API_KEY and MYSHIPTRACKING_SECRET_KEY must be set');
+  }
+  
+  // Check cache first
+  const cacheKey = `port-estimates:${portId}:${useUnloco ? 'unloco' : 'portid'}`;
+  const cached = getCached(cacheKey);
+  if (cached) {
+    console.log('[MyShipTracking] Using cached port estimates:', {
+      portId,
+      estimatesCount: cached.length,
+    });
+    return cached;
+  }
+  
+  console.log('[MyShipTracking] Fetching port estimates:', {
+    portId,
+    useUnloco,
+  });
+  
+  try {
+    const params = useUnloco 
+      ? { unloco: String(portId) }
+      : { port_id: Number(portId) };
+    
+    const response = await makeRequest('port/estimate', params);
+    const estimates = normalizePortEstimates(response);
+    
+    // Cache for 5 minutes (estimates change frequently)
+    setCached(cacheKey, estimates, 300); // 5 minutes
+    
+    console.log('[MyShipTracking] Successfully fetched port estimates:', {
+      portId,
+      estimatesCount: estimates.length,
+    });
+    
+    return estimates;
+  } catch (error) {
+    console.error('[MyShipTracking] Error fetching port estimates:', {
+      portId,
+      useUnloco,
+      error: error.message,
+    });
+    throw error;
+  }
+}
+
+/**
+ * Fetch port calls for a specific port or vessel
+ * API docs: https://api.myshiptracking.com/docs/port-calls
+ * @param {object} params - Query parameters
+ * @param {string|number} params.portId - Port ID (optional, if using port)
+ * @param {string} params.unloco - UN/LOCODE (optional, if using port)
+ * @param {string|number} params.mmsi - MMSI (optional, if using vessel)
+ * @param {string} params.fromdate - Start date (ISO 8601, optional)
+ * @param {string} params.todate - End date (ISO 8601, optional)
+ * @param {number} params.days - Number of days back (optional, default 30)
+ * @param {number} params.type - Event type: 0=all, 1=arrivals, 2=departures (optional)
+ * @returns {Promise<Array>} Array of port call objects
+ */
+export async function fetchPortCalls(params) {
+  const apiKey = getApiKey();
+  const secretKey = getSecretKey();
+  if (!apiKey || !secretKey) {
+    console.error('[MyShipTracking] API credentials not configured:', {
+      hasApiKey: !!apiKey,
+      hasSecretKey: !!secretKey,
+    });
+    throw new Error('MYSHIPTRACKING_API_KEY and MYSHIPTRACKING_SECRET_KEY must be set');
+  }
+  
+  // Build cache key from params
+  const cacheKey = `port-calls:${JSON.stringify(params)}`;
+  const cached = getCached(cacheKey);
+  if (cached) {
+    console.log('[MyShipTracking] Using cached port calls:', {
+      params,
+      callsCount: cached.length,
+    });
+    return cached;
+  }
+  
+  console.log('[MyShipTracking] Fetching port calls:', params);
+  
+  try {
+    // Build query parameters
+    const queryParams = {};
+    if (params.portId) queryParams.port_id = Number(params.portId);
+    if (params.unloco) queryParams.unloco = String(params.unloco);
+    if (params.mmsi) queryParams.mmsi = String(params.mmsi);
+    if (params.fromdate) queryParams.fromdate = String(params.fromdate);
+    if (params.todate) queryParams.todate = String(params.todate);
+    if (params.days) queryParams.days = Number(params.days);
+    if (params.type !== undefined) queryParams.type = Number(params.type);
+    
+    const response = await makeRequest('port/calls', queryParams);
+    const calls = normalizePortCalls(response);
+    
+    // Cache for 15 minutes (port calls don't change as frequently)
+    setCached(cacheKey, calls, 900); // 15 minutes
+    
+    console.log('[MyShipTracking] Successfully fetched port calls:', {
+      params,
+      callsCount: calls.length,
+    });
+    
+    return calls;
+  } catch (error) {
+    console.error('[MyShipTracking] Error fetching port calls:', {
+      params,
+      error: error.message,
+    });
+    throw error;
+  }
+}
+
+/**
+ * Fetch vessels currently in port
+ * API docs: https://api.myshiptracking.com/docs/in-port-api
+ * @param {string|number} portId - Port ID (integer) or UN/LOCODE
+ * @param {object} options - Options object
+ * @param {boolean} options.useUnloco - If true, use unloco parameter instead of port_id
+ * @returns {Promise<Array>} Array of vessel objects
+ */
+export async function fetchVesselsInPort(portId, { useUnloco = false } = {}) {
+  const apiKey = getApiKey();
+  const secretKey = getSecretKey();
+  if (!apiKey || !secretKey) {
+    console.error('[MyShipTracking] API credentials not configured:', {
+      hasApiKey: !!apiKey,
+      hasSecretKey: !!secretKey,
+    });
+    throw new Error('MYSHIPTRACKING_API_KEY and MYSHIPTRACKING_SECRET_KEY must be set');
+  }
+  
+  // Check cache first
+  const cacheKey = `vessels-in-port:${portId}:${useUnloco ? 'unloco' : 'portid'}`;
+  const cached = getCached(cacheKey);
+  if (cached) {
+    console.log('[MyShipTracking] Using cached vessels in port:', {
+      portId,
+      vesselsCount: cached.length,
+    });
+    return cached;
+  }
+  
+  console.log('[MyShipTracking] Fetching vessels in port:', {
+    portId,
+    useUnloco,
+  });
+  
+  try {
+    const params = useUnloco 
+      ? { unloco: String(portId) }
+      : { port_id: Number(portId) };
+    
+    const response = await makeRequest('port/in-port', params);
+    const vessels = normalizeVesselsInPort(response);
+    
+    // Cache for 5 minutes (vessels in port change frequently)
+    setCached(cacheKey, vessels, 300); // 5 minutes
+    
+    console.log('[MyShipTracking] Successfully fetched vessels in port:', {
+      portId,
+      vesselsCount: vessels.length,
+    });
+    
+    return vessels;
+  } catch (error) {
+    console.error('[MyShipTracking] Error fetching vessels in port:', {
+      portId,
+      useUnloco,
+      error: error.message,
+    });
+    throw error;
+  }
+}
+
+/**
+ * Normalize MyShipTracking port estimates response to app format
+ * API v2 response structure: { status: "success", data: [{ mmsi, imo, vessel_name, eta_utc, eta_local, ... }] }
+ */
+function normalizePortEstimates(response) {
+  // Check for error status
+  if (response.status === 'error') {
+    console.warn('[MyShipTracking] API returned error status in port estimates response:', response);
+    return [];
+  }
+  
+  const estimates = response.data || [];
+  
+  if (!Array.isArray(estimates)) {
+    return [];
+  }
+  
+  return estimates.map((est) => ({
+    mmsi: est.mmsi ? String(est.mmsi) : null,
+    imo: est.imo ? String(est.imo) : null,
+    vesselName: est.vessel_name || est.name,
+    vesselType: est.vessel_type || est.vtype,
+    flag: est.flag,
+    gt: est.gt,
+    dwt: est.dwt,
+    built: est.built,
+    length: est.length,
+    width: est.width,
+    etaUtc: est.eta_utc || est.eta,
+    etaLocal: est.eta_local,
+  }));
+}
+
+/**
+ * Normalize MyShipTracking port calls response to app format
+ * API v2 response structure: { status: "success", data: [{ mmsi, imo, vessel_name, arrival, departure, ... }] }
+ */
+function normalizePortCalls(response) {
+  // Check for error status
+  if (response.status === 'error') {
+    console.warn('[MyShipTracking] API returned error status in port calls response:', response);
+    return [];
+  }
+  
+  const calls = response.data || [];
+  
+  if (!Array.isArray(calls)) {
+    return [];
+  }
+  
+  return calls.map((call) => ({
+    mmsi: call.mmsi ? String(call.mmsi) : null,
+    imo: call.imo ? String(call.imo) : null,
+    vesselName: call.vessel_name || call.name,
+    portId: call.port_id,
+    portName: call.port_name || call.port,
+    arrival: call.arrival || call.arrival_utc,
+    departure: call.departure || call.departure_utc,
+    arrivalLocal: call.arrival_local,
+    departureLocal: call.departure_local,
+    type: call.type, // 1=arrival, 2=departure
+  }));
+}
+
+/**
+ * Normalize MyShipTracking vessels in port response to app format
+ * API v2 response structure: { status: "success", data: [{ mmsi, imo, vessel_name, ... }] }
+ */
+function normalizeVesselsInPort(response) {
+  // Check for error status
+  if (response.status === 'error') {
+    console.warn('[MyShipTracking] API returned error status in vessels in port response:', response);
+    return [];
+  }
+  
+  const vessels = response.data || [];
+  
+  if (!Array.isArray(vessels)) {
+    return [];
+  }
+  
+  return vessels.map((vessel) => ({
+    mmsi: vessel.mmsi ? String(vessel.mmsi) : null,
+    imo: vessel.imo ? String(vessel.imo) : null,
+    vesselName: vessel.vessel_name || vessel.name,
+    vesselType: vessel.vessel_type || vessel.vtype,
+    flag: vessel.flag,
+    gt: vessel.gt,
+    dwt: vessel.dwt,
+    built: vessel.built,
+    length: vessel.length,
+    width: vessel.width,
+    arrival: vessel.arrival || vessel.arrival_utc,
+    arrivalLocal: vessel.arrival_local,
+  }));
 }

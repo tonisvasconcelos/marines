@@ -15,6 +15,7 @@ import SettingsTenant from './pages/Settings/Tenant';
 import SettingsUsers from './pages/Settings/Users';
 import SettingsAis from './pages/Settings/Ais';
 import OpsSites from './pages/OpsSites';
+import PortCallsFromAIS from './pages/OpsSites/PortCallsFromAIS';
 import Customers from './pages/Customers';
 import Agents from './pages/Agents';
 
@@ -62,6 +63,7 @@ function AppRoutes() {
                 <Route path="/agents" element={<Agents />} />
                 <Route path="/customers" element={<Customers />} />
                 <Route path="/ops-sites" element={<OpsSites />} />
+                <Route path="/ops-sites/:id/port-calls" element={<PortCallsFromAIS />} />
                 <Route path="/settings/tenant" element={<SettingsTenant />} />
                 <Route path="/settings/users" element={<SettingsUsers />} />
                 <Route path="/settings/ais" element={<SettingsAis />} />

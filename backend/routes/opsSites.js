@@ -1,6 +1,9 @@
 import express from 'express';
 import { getMockOpsSites, createMockOpsSite, updateMockOpsSite, deleteMockOpsSite } from '../data/mockData.js';
 import * as portsDb from '../db/ports.js';
+import * as vesselsDb from '../db/vessels.js';
+import { fetchPortEstimates, fetchPortCalls, fetchVesselsInPort } from '../services/myshiptracking.js';
+import { myshiptrackingLimiter } from '../middleware/externalApiRateLimit.js';
 import crypto from 'crypto';
 
 const router = express.Router();
@@ -50,25 +53,193 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/ops-sites/:id/portcalls - Get port calls for an ops site
+// GET /api/ops-sites/:id/port-estimates - Get port estimates (expected arrivals) from AIS API
+// Returns estimated arrivals for the last 24h, filtered to only show tenant vessels
+router.get('/:id/port-estimates', myshiptrackingLimiter, async (req, res) => {
+  const { tenantId } = req;
+  const { id } = req.params;
+  
+  try {
+    // Get ops site from database
+    const site = await portsDb.getPortById(id, tenantId);
+    if (!site) {
+      return res.status(404).json({ message: 'Ops site not found' });
+    }
+    
+    // Get all tenant vessels to filter results
+    const tenantVessels = await vesselsDb.getVessels(tenantId);
+    const tenantMmsis = new Set(tenantVessels.map(v => v.mmsi).filter(Boolean));
+    const tenantImos = new Set(tenantVessels.map(v => v.imo?.replace(/^IMO/i, '').trim()).filter(Boolean));
+    
+    // Determine port identifier (port_id or unloco)
+    let portId = null;
+    let useUnloco = false;
+    
+    if (site.portId) {
+      portId = site.portId;
+      useUnloco = false;
+    } else if (site.unlocode || site.code) {
+      portId = site.unlocode || site.code;
+      useUnloco = true;
+    } else {
+      return res.status(400).json({ 
+        message: 'Ops site must have port_id or UN/LOCODE to fetch port estimates' 
+      });
+    }
+    
+    // Fetch port estimates from MyShipTracking
+    const estimates = await fetchPortEstimates(portId, { useUnloco });
+    
+    // Filter to only show tenant vessels
+    const filteredEstimates = estimates.filter(est => 
+      (est.mmsi && tenantMmsis.has(est.mmsi)) ||
+      (est.imo && tenantImos.has(est.imo))
+    );
+    
+    res.json(filteredEstimates);
+  } catch (error) {
+    console.error('[Ops Sites] Error fetching port estimates:', error);
+    res.status(500).json({ 
+      message: 'Failed to fetch port estimates',
+      error: error.message 
+    });
+  }
+});
+
+// GET /api/ops-sites/:id/port-calls - Get port calls from AIS API
+// Returns port call records, filtered to only show tenant vessels
+router.get('/:id/port-calls-ais', myshiptrackingLimiter, async (req, res) => {
+  const { tenantId } = req;
+  const { id } = req.params;
+  const { fromdate, todate, days = 30, type } = req.query;
+  
+  try {
+    // Get ops site from database
+    const site = await portsDb.getPortById(id, tenantId);
+    if (!site) {
+      return res.status(404).json({ message: 'Ops site not found' });
+    }
+    
+    // Get all tenant vessels to filter results
+    const tenantVessels = await vesselsDb.getVessels(tenantId);
+    const tenantMmsis = new Set(tenantVessels.map(v => v.mmsi).filter(Boolean));
+    const tenantImos = new Set(tenantVessels.map(v => v.imo?.replace(/^IMO/i, '').trim()).filter(Boolean));
+    
+    // Determine port identifier (port_id or unloco)
+    let portId = null;
+    let useUnloco = false;
+    
+    if (site.portId) {
+      portId = site.portId;
+      useUnloco = false;
+    } else if (site.unlocode || site.code) {
+      portId = site.unlocode || site.code;
+      useUnloco = true;
+    } else {
+      return res.status(400).json({ 
+        message: 'Ops site must have port_id or UN/LOCODE to fetch port calls' 
+      });
+    }
+    
+    // Build query parameters
+    const params = useUnloco ? { unloco: portId } : { portId: Number(portId) };
+    if (fromdate) params.fromdate = String(fromdate);
+    if (todate) params.todate = String(todate);
+    if (days) params.days = Number(days);
+    if (type !== undefined) params.type = Number(type);
+    
+    // Fetch port calls from MyShipTracking
+    const calls = await fetchPortCalls(params);
+    
+    // Filter to only show tenant vessels
+    const filteredCalls = calls.filter(call => 
+      (call.mmsi && tenantMmsis.has(call.mmsi)) ||
+      (call.imo && tenantImos.has(call.imo))
+    );
+    
+    res.json(filteredCalls);
+  } catch (error) {
+    console.error('[Ops Sites] Error fetching port calls:', error);
+    res.status(500).json({ 
+      message: 'Failed to fetch port calls',
+      error: error.message 
+    });
+  }
+});
+
+// GET /api/ops-sites/:id/vessels-in-port - Get vessels currently in port from AIS API
+// Returns vessels currently in port, filtered to only show tenant vessels
+router.get('/:id/vessels-in-port', myshiptrackingLimiter, async (req, res) => {
+  const { tenantId } = req;
+  const { id } = req.params;
+  
+  try {
+    // Get ops site from database
+    const site = await portsDb.getPortById(id, tenantId);
+    if (!site) {
+      return res.status(404).json({ message: 'Ops site not found' });
+    }
+    
+    // Get all tenant vessels to filter results
+    const tenantVessels = await vesselsDb.getVessels(tenantId);
+    const tenantMmsis = new Set(tenantVessels.map(v => v.mmsi).filter(Boolean));
+    const tenantImos = new Set(tenantVessels.map(v => v.imo?.replace(/^IMO/i, '').trim()).filter(Boolean));
+    
+    // Determine port identifier (port_id or unloco)
+    let portId = null;
+    let useUnloco = false;
+    
+    if (site.portId) {
+      portId = site.portId;
+      useUnloco = false;
+    } else if (site.unlocode || site.code) {
+      portId = site.unlocode || site.code;
+      useUnloco = true;
+    } else {
+      return res.status(400).json({ 
+        message: 'Ops site must have port_id or UN/LOCODE to fetch vessels in port' 
+      });
+    }
+    
+    // Fetch vessels in port from MyShipTracking
+    const vessels = await fetchVesselsInPort(portId, { useUnloco });
+    
+    // Filter to only show tenant vessels
+    const filteredVessels = vessels.filter(vessel => 
+      (vessel.mmsi && tenantMmsis.has(vessel.mmsi)) ||
+      (vessel.imo && tenantImos.has(vessel.imo))
+    );
+    
+    res.json(filteredVessels);
+  } catch (error) {
+    console.error('[Ops Sites] Error fetching vessels in port:', error);
+    res.status(500).json({ 
+      message: 'Failed to fetch vessels in port',
+      error: error.message 
+    });
+  }
+});
+
+// GET /api/ops-sites/:id/portcalls - Get port calls for an ops site (legacy endpoint, kept for compatibility)
 // This must come before /:id route to avoid route conflicts
 router.get('/:id/portcalls', async (req, res) => {
   const { tenantId } = req;
   const { id } = req.params;
   const { limit, days } = req.query;
   
-  const sites = getMockOpsSites(tenantId);
-  const site = sites.find((s) => s.id === id);
-  
-  if (!site) {
-    return res.status(404).json({ message: 'Ops site not found' });
+  try {
+    // Get ops site from database
+    const site = await portsDb.getPortById(id, tenantId);
+    if (!site) {
+      return res.status(404).json({ message: 'Ops site not found' });
+    }
+    
+    // Return empty array - use /port-calls-ais endpoint for AIS data
+    res.json([]);
+  } catch (error) {
+    console.error('[Ops Sites] Error:', error);
+    res.status(500).json({ message: 'Failed to fetch port calls' });
   }
-  
-  // Note: AISStream does not provide port calls API
-  // Port calls are managed internally via the /api/port-calls endpoint
-  // Return empty array - port calls should be fetched from the port-calls endpoint
-  // and filtered by ops site if needed
-  res.json([]);
 });
 
 // GET /api/ops-sites/:id - Get single ops site
