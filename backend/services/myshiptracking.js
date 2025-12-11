@@ -72,11 +72,19 @@ async function makeRequest(endpoint, params = {}) {
   });
   
   try {
+    // MyShipTracking API uses x-api-key header (not Authorization Bearer)
+    const headers = {
+      'Accept': 'application/json',
+      'x-api-key': authParams.apiKey,
+    };
+    
+    // Include secret key if available (some endpoints may require it)
+    if (authParams.secretKey) {
+      headers['x-api-secret'] = authParams.secretKey;
+    }
+    
     const response = await fetch(url, { 
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': `Bearer ${authParams.apiKey}`,
-      },
+      headers,
       method: 'GET',
     });
     
