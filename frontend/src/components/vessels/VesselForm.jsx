@@ -64,12 +64,19 @@ function VesselForm({ onClose, vessel = null }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     
-    // Clean IMO - remove 'IMO' prefix if present
+    // Validate that at least one of IMO or MMSI is provided
     const cleanImo = formData.imo.replace(/^IMO/i, '').trim();
+    const cleanMmsi = formData.mmsi.trim();
+    
+    if (!cleanImo && !cleanMmsi) {
+      alert('Either IMO or MMSI is required to create a vessel.');
+      return;
+    }
     
     createMutation.mutate({
       ...formData,
       imo: cleanImo ? `IMO${cleanImo}` : '',
+      mmsi: cleanMmsi || '',
     });
   };
 
@@ -94,7 +101,7 @@ function VesselForm({ onClose, vessel = null }) {
             />
           </div>
           <div className={styles.field}>
-            <label>IMO Number</label>
+            <label>IMO Number *</label>
             <input
               type="text"
               value={formData.imo}
@@ -102,17 +109,20 @@ function VesselForm({ onClose, vessel = null }) {
               placeholder="e.g., 9715737 or IMO9715737"
             />
             <small className={styles.helpText}>
-              Enter IMO number (with or without 'IMO' prefix). Used to fetch AIS position.
+              Enter IMO number (with or without 'IMO' prefix). Either IMO or MMSI is required.
             </small>
           </div>
           <div className={styles.field}>
-            <label>MMSI</label>
+            <label>MMSI *</label>
             <input
               type="text"
               value={formData.mmsi}
               onChange={(e) => setFormData({ ...formData, mmsi: e.target.value })}
               placeholder="e.g., 123456789"
             />
+            <small className={styles.helpText}>
+              Enter MMSI number. Either IMO or MMSI is required.
+            </small>
           </div>
           <div className={styles.field}>
             <label>Call Sign</label>

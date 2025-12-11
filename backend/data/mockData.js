@@ -230,6 +230,12 @@ function generateMaritimePosition(baseLat = -22.9068, baseLon = -43.1729) {
 }
 
 export function getMockAisPosition(vesselId) {
+  // Only use mock data in development/testing environments
+  if (process.env.NODE_ENV === 'production') {
+    console.warn(`[MockData] Attempted to use mock AIS position in production for vessel ${vesselId}. This should not happen.`);
+    return null;
+  }
+  
   // Always regenerate to ensure positions are in maritime waters
   // This ensures vessels are never plotted on land
   const maritimePos = generateMaritimePosition();

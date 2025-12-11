@@ -194,38 +194,22 @@ router.get('/active-vessels', async (req, res) => {
           return positionData;
         }
       } catch (error) {
-        console.warn(`[getVesselPosition] AISStream API error for vessel ${vessel.id} (${vessel.name}):`, {
+        console.warn(`[getVesselPosition] MyShipTracking API error for vessel ${vessel.id} (${vessel.name}):`, {
+          identifier,
+          type,
           error: error.message,
-          mmsi: vessel.mmsi,
+          errorType: error.constructor.name,
         });
-        // Fall through to mock data
+        // Continue - will return null if no stored position exists
       }
     } else {
-      console.warn(`[getVesselPosition] Vessel ${vessel.id} (${vessel.name}) has no MMSI - cannot query AISStream (MMSI required)`);
+      console.warn(`[getVesselPosition] Vessel ${vessel.id} (${vessel.name}) has no MMSI or IMO - cannot query AIS API`);
     }
     
-    // Fallback to mock data (only if AIS API failed or returned no data)
-    const mockPos = getMockAisPosition(vessel.id);
-    const mockPositionData = {
-      lat: mockPos.lat,
-      lon: mockPos.lon,
-      timestamp: mockPos.timestamp,
-      sog: mockPos.sog,
-      cog: mockPos.cog,
-      heading: mockPos.heading,
-      navStatus: mockPos.navStatus,
-      source: 'mock',
-    };
-    
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`[getVesselPosition] Using mock position for vessel ${vessel.id} (${vessel.name}):`, {
-        source: 'mock',
-        position: mockPositionData,
-        reason: vessel.mmsi ? 'AISStream API failed or returned no data' : 'Vessel has no MMSI',
-      });
-    }
-    
-    return mockPositionData;
+    // No position available from AIS API or stored data
+    // Return null to indicate position is unavailable
+    console.warn(`[getVesselPosition] No position data available for vessel ${vessel.id} (${vessel.name})`);
+    return null;
   };
   
   // Track previous statuses for status change detection
@@ -438,22 +422,26 @@ router.get('/events', async (req, res) => {
     const vessel = vessels.find((v) => v.id === pc.vesselId);
     if (!vessel) return;
     
-    // AIS updates
-    const aisPos = getMockAisPosition(pc.vesselId);
-    events.push({
-      id: `ais-${pc.vesselId}-${Date.now()}`,
-      type: 'AIS_UPDATE',
-      severity: 'info',
-      timestamp: aisPos.timestamp,
-      vessel: vessel.name,
-      vesselId: vessel.id,
-      message: `AIS update: ${vessel.name} at ${aisPos.lat.toFixed(4)}, ${aisPos.lon.toFixed(4)}`,
-      data: {
-        sog: aisPos.sog,
-        cog: aisPos.cog,
-        navStatus: aisPos.navStatus,
-      },
-    });
+    // AIS updates - only in development mode
+    if (process.env.NODE_ENV !== 'production') {
+      const aisPos = getMockAisPosition(pc.vesselId);
+      if (aisPos) {
+        events.push({
+          id: `ais-${pc.vesselId}-${Date.now()}`,
+          type: 'AIS_UPDATE',
+          severity: 'info',
+          timestamp: aisPos.timestamp,
+          vessel: vessel.name,
+          vesselId: vessel.id,
+          message: `AIS update: ${vessel.name} at ${aisPos.lat.toFixed(4)}, ${aisPos.lon.toFixed(4)}`,
+          data: {
+            sog: aisPos.sog,
+            cog: aisPos.cog,
+            navStatus: aisPos.navStatus,
+          },
+        });
+      }
+    }
     
     // Arrivals
     const eta = new Date(pc.eta);
@@ -503,13 +491,14 @@ router.get('/events', async (req, res) => {
     }
   });
   
-  // Check geofence entries (vessel monitoring)
-  const opsSites = getMockOpsSites(tenantId);
-  vessels.forEach((vessel) => {
-    const aisPos = getMockAisPosition(vessel.id);
-    if (!aisPos) return;
-    
-    const vesselPoint = { lat: aisPos.lat, lon: aisPos.lon };
+  // Check geofence entries (vessel monitoring) - only in development mode
+  if (process.env.NODE_ENV !== 'production') {
+    const opsSites = getMockOpsSites(tenantId);
+    vessels.forEach((vessel) => {
+      const aisPos = getMockAisPosition(vessel.id);
+      if (!aisPos) return;
+      
+      const vesselPoint = { lat: aisPos.lat, lon: aisPos.lon };
     
     opsSites.forEach((site) => {
       let isInside = false;
@@ -548,7 +537,8 @@ router.get('/events', async (req, res) => {
         });
       }
     });
-  });
+    });
+  }
   
   // Sort by timestamp (newest first)
   events.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
