@@ -136,8 +136,8 @@ router.get('/active-vessels', async (req, res) => {
     // This saves API credits and uses data that's already been recorded
     try {
       const storedPosition = await vesselDb.getLatestPosition(vessel.id, tenantId);
-      if (storedPosition && storedPosition.lat && storedPosition.lon) {
-        console.log(`[getVesselPosition] Using stored position from Last Vessel Positions for vessel ${vessel.id} (${vessel.name}): ${storedPosition.lat.toFixed(4)}, ${storedPosition.lon.toFixed(4)}`);
+      if (storedPosition && storedPosition.lat != null && storedPosition.lon != null) {
+        console.log(`[getVesselPosition] ✅ Using stored position from Last Vessel Positions for vessel ${vessel.id} (${vessel.name}): ${storedPosition.lat.toFixed(4)}, ${storedPosition.lon.toFixed(4)}`);
         return {
           lat: storedPosition.lat,
           lon: storedPosition.lon,
@@ -149,10 +149,10 @@ router.get('/active-vessels', async (req, res) => {
           source: storedPosition.source || 'stored',
         };
       } else {
-        console.log(`[getVesselPosition] No stored position in Last Vessel Positions for vessel ${vessel.id} (${vessel.name})`);
+        console.log(`[getVesselPosition] ⚠️ No stored position in Last Vessel Positions for vessel ${vessel.id} (${vessel.name}) - storedPosition:`, storedPosition);
       }
     } catch (error) {
-      console.error(`[getVesselPosition] Error fetching stored position for vessel ${vessel.id}:`, error);
+      console.error(`[getVesselPosition] ❌ Error fetching stored position for vessel ${vessel.id} (${vessel.name}):`, error);
     }
     
     // No stored position available - return null (vessel won't be plotted on map)
