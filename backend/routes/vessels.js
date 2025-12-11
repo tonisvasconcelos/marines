@@ -9,6 +9,7 @@ import * as vesselDb from '../db/vessels.js';
 import * as operationLogsDb from '../db/operationLogs.js';
 import { fetchLatestPosition, fetchLatestPositionByMmsi, fetchLatestPositionByImo } from '../services/myshiptracking.js';
 import { myshiptrackingLimiter } from '../middleware/externalApiRateLimit.js';
+import { validateVesselIdentifier } from '../middleware/validateMyShipTracking.js';
 
 const router = express.Router();
 
