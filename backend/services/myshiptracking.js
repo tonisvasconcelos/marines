@@ -155,37 +155,49 @@ async function makeRequest(endpoint, params = {}) {
  * Normalize MyShipTracking vessel status response to app format
  */
 function normalizePosition(response) {
-  // MyShipTracking response structure may vary
-  // Handle both simple and extended response formats
-  const vessel = response.data?.vessel || response.vessel || response.data || response;
+  // MyShipTracking API v2 response structure:
+  // { status: "success", data: { vessel_name, mmsi, imo, lat, lng, course, speed, nav_status, received, ... } }
+  // Reference: https://api.myshiptracking.com/docs/vessel-current-position-api
+  if (response.status === 'error') {
+    console.warn('[MyShipTracking] API returned error status in response:', response);
+    return null;
+  }
+  
+  const vessel = response.data || response.vessel || response;
   
   if (!vessel) {
     return null;
   }
   
-  // Extract position data
-  const lat = vessel.latitude || vessel.lat;
-  const lon = vessel.longitude || vessel.lon || vessel.lng;
+  // Extract position data - API uses 'lat' and 'lng' (not 'lon')
+  const lat = vessel.lat;
+  const lng = vessel.lng;
   
-  if (lat === undefined || lon === undefined || lat === null || lon === null) {
+  if (lat === undefined || lng === undefined || lat === null || lng === null) {
     return null;
   }
   
   return {
-    mmsi: String(vessel.mmsi || vessel.MMSI || ''),
-    imo: vessel.imo ? String(vessel.imo) : vessel.IMO ? String(vessel.IMO) : undefined,
-    name: vessel.name || vessel.vessel_name || vessel.ship_name,
-    callSign: vessel.call_sign || vessel.callSign || vessel.callsign,
+    mmsi: String(vessel.mmsi || ''),
+    imo: vessel.imo ? String(vessel.imo) : undefined,
+    name: vessel.vessel_name || vessel.name,
+    callSign: vessel.callsign || vessel.call_sign,
     lat: Number(lat),
-    lon: Number(lon),
-    cog: vessel.cog !== undefined ? Number(vessel.cog) : vessel.course !== undefined ? Number(vessel.course) : undefined,
-    sog: vessel.sog !== undefined ? Number(vessel.sog) : vessel.speed !== undefined ? Number(vessel.speed) : undefined,
+    lon: Number(lng), // API uses 'lng', we normalize to 'lon' for internal use
+    cog: vessel.course !== undefined ? Number(vessel.course) : undefined,
+    sog: vessel.speed !== undefined ? Number(vessel.speed) : undefined,
     heading: vessel.heading !== undefined ? Number(vessel.heading) : undefined,
-    navStatus: vessel.nav_status || vessel.navigational_status || vessel.status,
-    timestamp: vessel.timestamp || vessel.last_position_time || vessel.position_time || new Date().toISOString(),
+    navStatus: vessel.nav_status || vessel.navigational_status,
+    timestamp: vessel.received || vessel.timestamp || new Date().toISOString(), // API uses 'received' field
     destination: vessel.destination,
     eta: vessel.eta,
     draught: vessel.draught || vessel.draft,
+    // Extended response fields (if available)
+    vesselType: vessel.vessel_type || vessel.vtype,
+    flag: vessel.flag,
+    currentPort: vessel.current_port,
+    lastPort: vessel.last_port,
+    nextPort: vessel.next_port,
   };
 }
 
@@ -293,9 +305,10 @@ export async function fetchLatestPosition(identifier, { type = 'mmsi' } = {}) {
   });
   
   try {
-    // Use the correct endpoint: /vessel/status with query parameters (mmsi or imo)
+    // Use the correct endpoint: /vessel with query parameters (mmsi or imo)
+    // API docs: https://api.myshiptracking.com/docs/vessel-current-position-api
     const params = type === 'imo' ? { imo: identifier } : { mmsi: identifier };
-    const response = await makeRequest('vessel/status', params);
+    const response = await makeRequest('vessel', params);
     const position = normalizePosition(response);
     
     if (position) {
