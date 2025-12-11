@@ -95,19 +95,20 @@ router.get('/stats', async (req, res) => {
 router.get('/active-vessels', async (req, res) => {
   const { tenantId } = req;
   
-  // Get vessels from database (with fallback to mock data)
-  let vessels;
   try {
-    vessels = await vesselDb.getVessels(tenantId);
-    // If database returns empty array and we're using database, fall back to mock
-    if (vessels.length === 0) {
-      console.warn('No vessels in database, falling back to mock data');
+    // Get vessels from database (with fallback to mock data)
+    let vessels;
+    try {
+      vessels = await vesselDb.getVessels(tenantId);
+      // If database returns empty array and we're using database, fall back to mock
+      if (vessels.length === 0) {
+        console.warn('No vessels in database, falling back to mock data');
+        vessels = getMockVessels(tenantId);
+      }
+    } catch (error) {
+      console.error('Error fetching vessels from database, using mock data:', error);
       vessels = getMockVessels(tenantId);
     }
-  } catch (error) {
-    console.error('Error fetching vessels from database, using mock data:', error);
-    vessels = getMockVessels(tenantId);
-  }
   
   const portCalls = getMockPortCalls(tenantId);
   const aisConfig = getAisConfig(tenantId);
