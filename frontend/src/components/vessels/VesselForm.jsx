@@ -52,8 +52,12 @@ function VesselForm({ onClose, vessel = null }) {
   const createMutation = useMutation({
     mutationFn: (data) => api.post('/vessels', data),
     onSuccess: (newVessel) => {
+      // Invalidate both vessels list and dashboard queries to ensure UI updates
       queryClient.invalidateQueries(['vessels']);
-      // If vessel was created with IMO/MMSI, we could fetch position here
+      queryClient.invalidateQueries(['dashboard', 'active-vessels']);
+      queryClient.invalidateQueries(['dashboard', 'stats']);
+      // Position is now fetched automatically on vessel creation
+      // Dashboard will show the new vessel once position is stored
       onClose();
     },
     onError: (error) => {

@@ -127,9 +127,48 @@ router.post('/', async (req, res) => {
       flag,
     });
     
-    // DISABLED: Automatic position fetch on vessel creation to save credits
-    // Users can manually refresh position from the vessel detail page
-    console.log(`[Vessel Creation] Vessel created successfully. Position can be manually refreshed from vessel detail page.`);
+    // CRITICAL: Fetch position once on vessel creation to ensure it appears on the dashboard map
+    // This is a one-time fetch to make the vessel visible - subsequent refreshes are manual
+    if ((cleanMmsi || cleanImo)) {
+      try {
+        const identifier = cleanMmsi || cleanImo;
+        const type = cleanMmsi ? 'mmsi' : 'imo';
+        
+        console.log(`[Vessel Creation] Fetching initial position for vessel ${newVessel.id} (${newVessel.name}) - ${type.toUpperCase()}: ${identifier}`);
+        
+        const position = await fetchLatestPosition(identifier, { type });
+        
+        if (position && position.lat && position.lon) {
+          // Store the position in database so vessel appears on dashboard map
+          try {
+            await vesselDb.storePositionHistory(newVessel.id, tenantId, {
+              lat: position.lat,
+              lon: position.lon,
+              timestamp: position.timestamp || new Date().toISOString(),
+              sog: position.sog,
+              cog: position.cog,
+              heading: position.heading,
+              navStatus: position.navStatus,
+              source: getProviderName().toLowerCase(),
+            });
+            console.log(`[Vessel Creation] ✅ Position stored for vessel ${newVessel.id} (${newVessel.name}): ${position.lat.toFixed(4)}, ${position.lon.toFixed(4)}`);
+          } catch (storeError) {
+            console.warn(`[Vessel Creation] Failed to store position for vessel ${newVessel.id}:`, storeError.message);
+          }
+        } else {
+          console.warn(`[Vessel Creation] ⚠️ No position data returned from AIS API for vessel ${newVessel.id} (${newVessel.name})`);
+        }
+      } catch (positionError) {
+        // Don't fail vessel creation if position fetch fails - vessel can still be created
+        console.error(`[Vessel Creation] ❌ Error fetching position for vessel ${newVessel.id} (${newVessel.name}):`, {
+          error: positionError.message,
+          identifier: cleanMmsi || cleanImo,
+          type: cleanMmsi ? 'mmsi' : 'imo',
+        });
+      }
+    } else {
+      console.warn(`[Vessel Creation] ⚠️ Vessel ${newVessel.id} (${newVessel.name}) created without MMSI/IMO - position cannot be fetched`);
+    }
     
     // Create operation log for vessel creation
     try {
