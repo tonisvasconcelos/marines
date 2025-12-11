@@ -63,17 +63,41 @@ export function VesselLayer({ map, vessels, tenantVessels = [], onVesselClick, o
   // Prepare vessel GeoJSON data with full-precision coordinates
   const vesselGeoJSON = useMemo(() => {
     if (!vessels || !Array.isArray(vessels) || vessels.length === 0) {
+      if (import.meta.env.DEV) {
+        console.log('[VesselLayer] No vessels provided or empty array');
+      }
       return {
         type: 'FeatureCollection',
         features: [],
       };
     }
 
+    if (import.meta.env.DEV) {
+      console.log('[VesselLayer] Processing vessels:', {
+        totalVessels: vessels.length,
+        vesselsWithPosition: vessels.filter(v => v.position && v.position.lat && v.position.lon).length,
+        sampleVessel: vessels[0],
+        samplePosition: vessels[0]?.position,
+      });
+    }
+
     const features = vessels
       .map((vessel) => {
         // Handle both vessel.position structure and direct lat/lon structure (from zone API)
         const positionData = vessel.position || vessel;
-        if (!vessel || ((!positionData.lat && !positionData.lon) && (!vessel.lat && !vessel.lng))) return null;
+        
+        // Debug logging for vessels without positions
+        if (!positionData || (!positionData.lat && !positionData.lon && !vessel.lat && !vessel.lng)) {
+          if (import.meta.env.DEV) {
+            console.warn('[VesselLayer] Skipping vessel without position:', {
+              vesselId: vessel.id,
+              vesselName: vessel.name,
+              hasPositionObject: !!vessel.position,
+              positionData,
+            });
+          }
+          return null;
+        }
 
         // Normalize coordinates (preserves full precision)
         // Handle both lng and lon for compatibility

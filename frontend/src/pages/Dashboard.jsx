@@ -52,6 +52,9 @@ function Dashboard() {
       isLoading: vesselsLoading,
       error: vesselsError,
       count: activeVessels?.length,
+      vesselsWithPositions: activeVessels?.filter(v => v.position && v.position.lat && v.position.lon).length,
+      sampleVessel: activeVessels?.[0],
+      samplePosition: activeVessels?.[0]?.position,
     });
   }
 
