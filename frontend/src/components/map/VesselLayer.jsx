@@ -288,6 +288,13 @@ export function VesselLayer({ map, vessels, tenantVessels = [], onVesselClick, o
         // Continue anyway - layers might not exist yet
       }
 
+    // Log vessel data for debugging
+    console.log('[VesselLayer] Initializing with vessel data:', {
+      totalFeatures: vesselGeoJSON.features.length,
+      hasFeatures: vesselGeoJSON.features.length > 0,
+      sampleFeature: vesselGeoJSON.features[0],
+    });
+
     // Add or update vessel source
     const existingSource = map.getSource(sourceId);
     if (existingSource) {
@@ -300,8 +307,12 @@ export function VesselLayer({ map, vessels, tenantVessels = [], onVesselClick, o
         console.error('[VesselLayer] ❌ Error updating source data:', error);
         // If update fails, remove and recreate
         try {
+          // Remove layers first
+          if (map.getLayer && map.getLayer(layerId)) map.removeLayer(layerId);
+          if (map.getLayer && map.getLayer(clusterLayerId)) map.removeLayer(clusterLayerId);
+          if (map.getLayer && map.getLayer(clusterCountLayerId)) map.removeLayer(clusterCountLayerId);
           map.removeSource(sourceId);
-          console.log('[VesselLayer] Removed source to recreate');
+          console.log('[VesselLayer] Removed source and layers to recreate');
         } catch (removeError) {
           console.warn('[VesselLayer] Error removing source:', removeError);
         }
@@ -327,6 +338,11 @@ export function VesselLayer({ map, vessels, tenantVessels = [], onVesselClick, o
         console.log('[VesselLayer] ✅ Source added successfully');
       } catch (error) {
         console.error('[VesselLayer] ❌ Error adding source:', error);
+        console.error('[VesselLayer] Error details:', {
+          message: error.message,
+          stack: error.stack,
+          vesselGeoJSON: vesselGeoJSON,
+        });
         return; // Can't continue without source
       }
     }
@@ -384,62 +400,80 @@ export function VesselLayer({ map, vessels, tenantVessels = [], onVesselClick, o
       console.error('[VesselLayer] ❌ Error adding cluster count layer:', error);
     }
 
-    // Function to add symbol layer for vessels (called after icon is ready)
-    const addVesselSymbolLayer = () => {
+    // Function to add vessel layer (always adds circle layer first, upgrades to symbol if icon available)
+    const addVesselLayer = () => {
+      // Check if source exists
+      if (!map.getSource(sourceId)) {
+        console.warn('[VesselLayer] Source does not exist, cannot add layer');
+        return;
+      }
+
       try {
-        // Remove existing circle layer if it exists (for migration)
-        if (map.getLayer && map.getLayer(layerId)) {
-          map.removeLayer(layerId);
-        }
-        
-        // Add symbol layer with oriented vessel icons
+        // Always add circle layer first (works without icons, ensures vessels are visible)
         if (!map.getLayer(layerId)) {
           map.addLayer({
             id: layerId,
-            type: 'symbol',
+            type: 'circle',
             source: sourceId,
-            filter: ['!', ['has', 'point_count']], // Only non-clustered points
-            layout: {
-              'icon-image': iconId,
-              'icon-size': 0.8, // Scale factor
-              'icon-rotate': ['get', 'rotation'], // Rotate based on COG/heading
-              'icon-rotation-alignment': 'map', // Rotate with map (not viewport)
-              'icon-allow-overlap': true, // Always show vessels (don't hide on overlap)
-              'icon-ignore-placement': true, // Don't prevent other symbols from showing
-            },
+            filter: ['!', ['has', 'point_count']],
             paint: {
-              'icon-color': ['get', 'color'], // Data-driven color from vessel properties
-              'icon-opacity': 0.95,
-              'icon-halo-color': '#ffffff', // White halo for contrast
-              'icon-halo-width': 1.5,
-              'icon-halo-blur': 1,
+              'circle-radius': 8,
+              'circle-color': ['get', 'color'],
+              'circle-stroke-width': 2,
+              'circle-stroke-color': '#fff',
+              'circle-opacity': 0.9,
             },
           });
-          console.log('[VesselLayer] ✅ Vessel symbol layer added (MarineTraffic-style)');
+          console.log('[VesselLayer] ✅ Circle layer added (vessels will be visible)');
         }
-      } catch (error) {
-        console.error('[VesselLayer] ❌ Error adding vessel symbol layer:', error);
-        // Fallback to circle layer if symbol layer fails
-        try {
-          if (!map.getLayer(layerId)) {
+        
+        // Try to upgrade to symbol layer if icon is available
+        const iconExists = map.hasImage(iconId);
+        if (iconExists) {
+          try {
+            // Remove circle layer and replace with symbol layer
+            if (map.getLayer(layerId)) {
+              map.removeLayer(layerId);
+            }
+            
             map.addLayer({
               id: layerId,
-              type: 'circle',
+              type: 'symbol',
               source: sourceId,
-              filter: ['!', ['has', 'point_count']],
+              filter: ['!', ['has', 'point_count']], // Only non-clustered points
+              layout: {
+                'icon-image': iconId,
+                'icon-size': 0.8, // Scale factor
+                'icon-rotate': ['get', 'rotation'], // Rotate based on COG/heading
+                'icon-rotation-alignment': 'map', // Rotate with map (not viewport)
+                'icon-allow-overlap': true, // Always show vessels (don't hide on overlap)
+                'icon-ignore-placement': true, // Don't prevent other symbols from showing
+              },
               paint: {
-                'circle-radius': 8,
-                'circle-color': ['get', 'color'],
-                'circle-stroke-width': 2,
-                'circle-stroke-color': '#fff',
-                'circle-opacity': 0.9,
+                'icon-color': ['get', 'color'], // Data-driven color from vessel properties
+                'icon-opacity': 0.95,
+                'icon-halo-color': '#ffffff', // White halo for contrast
+                'icon-halo-width': 1.5,
+                'icon-halo-blur': 1,
               },
             });
-            console.log('[VesselLayer] ✅ Fallback circle layer added');
+            console.log('[VesselLayer] ✅ Upgraded to symbol layer (MarineTraffic-style with icon)');
+          } catch (symbolError) {
+            console.warn('[VesselLayer] ⚠️ Could not upgrade to symbol layer, keeping circle layer:', symbolError);
+            // Circle layer is already added, so vessels are still visible
           }
-        } catch (fallbackError) {
-          console.error('[VesselLayer] ❌ Error adding fallback circle layer:', fallbackError);
+        } else {
+          console.log('[VesselLayer] Icon not ready yet, using circle layer (will upgrade when icon loads)');
         }
+      } catch (error) {
+        console.error('[VesselLayer] ❌ Error adding vessel layer:', error);
+        console.error('[VesselLayer] Error details:', {
+          message: error.message,
+          stack: error.stack,
+          layerId,
+          sourceId,
+          hasSource: !!map.getSource(sourceId),
+        });
       }
     };
 
@@ -447,8 +481,19 @@ export function VesselLayer({ map, vessels, tenantVessels = [], onVesselClick, o
     // SDF (Signed Distance Field) allows us to change icon color dynamically
     const iconId = 'vessel-icon-sdf';
     
-    // Create icon only if it doesn't exist
-    if (!map.hasImage(iconId)) {
+    // Helper to ensure icon exists and then add/upgrade vessel layer
+    const ensureIconAndAddLayer = () => {
+      // Always add circle layer first (ensures vessels are visible immediately)
+      addVesselLayer();
+      
+      // If icon already exists, upgrade to symbol layer
+      if (map.hasImage(iconId)) {
+        console.log('[VesselLayer] Icon already exists, upgrading to symbol layer');
+        addVesselLayer(); // This will upgrade from circle to symbol
+        return;
+      }
+
+      // Icon doesn't exist, create it
       const size = 32; // Icon size in pixels
       const padding = 2; // Padding for SDF
       const canvas = document.createElement('canvas');
@@ -485,36 +530,38 @@ export function VesselLayer({ map, vessels, tenantVessels = [], onVesselClick, o
       img.onload = () => {
         // Check if map still exists and is valid
         if (!map || !map.isStyleLoaded || typeof map.addImage !== 'function') {
-          console.warn('[VesselLayer] Map not available when icon loaded');
+          console.warn('[VesselLayer] Map not available when icon loaded, using fallback');
+          // Use fallback circle layer
+          addVesselSymbolLayer();
           return;
         }
         
-        if (!map.hasImage(iconId)) {
-          try {
-            // Add as SDF image to enable data-driven coloring
+        try {
+          // Add as SDF image to enable data-driven coloring
+          if (!map.hasImage(iconId)) {
             map.addImage(iconId, img, { sdf: true });
             console.log('[VesselLayer] ✅ Vessel icon (SDF) added to map');
-            
-            // After icon is added, add the symbol layer
-            addVesselSymbolLayer();
-          } catch (error) {
-            console.error('[VesselLayer] ❌ Error adding icon to map:', error);
           }
-        } else {
-          // Icon already added, just add the layer
-          addVesselSymbolLayer();
+          
+          // After icon is added, upgrade to symbol layer
+          // Use setTimeout to ensure icon is fully registered
+          setTimeout(() => {
+            addVesselLayer(); // This will upgrade from circle to symbol
+          }, 50);
+        } catch (error) {
+          console.error('[VesselLayer] ❌ Error adding icon to map:', error);
+          // Circle layer is already added, so vessels are still visible
         }
       };
       img.onerror = (error) => {
         console.error('[VesselLayer] ❌ Error loading vessel icon image:', error);
-        // Fallback to circle layer if icon fails to load
-        addVesselSymbolLayer();
+        // Circle layer is already added, so vessels are still visible
       };
       img.src = canvas.toDataURL();
-    } else {
-      // Icon already exists, just add the symbol layer
-      addVesselSymbolLayer();
-    }
+    };
+
+    // Ensure icon exists and add symbol layer
+    ensureIconAndAddLayer();
 
       // Remove existing event handlers to prevent duplicates
       if (eventHandlersRef.current.clusterClick) {
