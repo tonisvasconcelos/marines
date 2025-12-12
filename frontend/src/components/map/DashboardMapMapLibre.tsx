@@ -28,6 +28,7 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, ten
   const [overlays, setOverlays] = useState({});
   const [measurementEnabled, setMeasurementEnabled] = useState(false);
   const [mapBounds, setMapBounds] = useState(null);
+  const [isStyleReady, setIsStyleReady] = useState(false); // Track when map style is loaded
   const hasUserInteractedRef = useRef(false);
   const initialBoundsSetRef = useRef(false);
 
@@ -44,6 +45,26 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, ten
   const handleMapReady = useCallback((map) => {
     mapRef.current = map;
     console.log('[DashboardMapMapLibre] MapLibre map ready');
+
+    // Check if style is already loaded
+    if (map.isStyleLoaded()) {
+      setIsStyleReady(true);
+    } else {
+      // Wait for style to load
+      map.once('style.load', () => {
+        console.log('[DashboardMapMapLibre] Map style loaded');
+        setIsStyleReady(true);
+      });
+    }
+
+    // Also listen for style data loading (handles style changes)
+    map.on('styledata', () => {
+      if (map.isStyleLoaded()) {
+        setIsStyleReady(true);
+      } else {
+        setIsStyleReady(false);
+      }
+    });
 
     // Resize map to ensure proper rendering (especially in modals)
     setTimeout(() => {
@@ -392,7 +413,8 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, ten
       
       {/* Vessel Layer - renders vessels with clustering */}
       {/* Only shows database vessels with stored positions - no automatic API calls */}
-      {mapRef.current && mapRef.current.isStyleLoaded() && (
+      {/* Use reactive state instead of ref check to ensure VesselLayer mounts when style is ready */}
+      {isStyleReady && mapRef.current && (
         <VesselLayer
           map={mapRef.current}
           vessels={enrichedVessels} // Database vessels with stored positions only

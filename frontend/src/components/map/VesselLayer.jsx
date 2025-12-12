@@ -241,34 +241,52 @@ export function VesselLayer({ map, vessels, tenantVessels = [], onVesselClick, o
     };
   }, [vessels, tenantVesselSet]);
 
+  // Store event handlers in refs to prevent duplicates and enable cleanup
+  const eventHandlersRef = useRef({
+    clusterClick: null,
+    vesselClick: null,
+    vesselMouseEnter: null,
+    vesselMouseLeave: null,
+    styleLoad: null,
+  });
+
   // Update vessel layer on MapLibre
   useEffect(() => {
-    if (!map || !map.isStyleLoaded || typeof map.isStyleLoaded !== 'function' || !map.isStyleLoaded()) return;
-    if (typeof map.getLayer !== 'function' || typeof map.addSource !== 'function') return;
+    if (!map || typeof map.getLayer !== 'function' || typeof map.addSource !== 'function') {
+      console.warn('[VesselLayer] Map not ready or missing required methods');
+      return;
+    }
 
     const sourceId = 'vessels';
     const layerId = 'vessels-layer';
     const clusterLayerId = 'vessels-clusters';
     const clusterCountLayerId = 'vessels-cluster-count';
 
-    // Remove existing layers first (with safety checks)
-    try {
-      if (map.getLayer && map.getLayer(layerId)) {
-        map.removeLayer(layerId);
-        console.log('[VesselLayer] Removed existing layer:', layerId);
+    // Function to initialize vessel layers (called when style is ready)
+    const initializeVesselLayers = () => {
+      if (!map.isStyleLoaded()) {
+        console.warn('[VesselLayer] Style not loaded yet, cannot initialize layers');
+        return;
       }
-      if (map.getLayer && map.getLayer(clusterLayerId)) {
-        map.removeLayer(clusterLayerId);
-        console.log('[VesselLayer] Removed existing layer:', clusterLayerId);
+
+      // Remove existing layers first (with safety checks)
+      try {
+        if (map.getLayer && map.getLayer(layerId)) {
+          map.removeLayer(layerId);
+          console.log('[VesselLayer] Removed existing layer:', layerId);
+        }
+        if (map.getLayer && map.getLayer(clusterLayerId)) {
+          map.removeLayer(clusterLayerId);
+          console.log('[VesselLayer] Removed existing layer:', clusterLayerId);
+        }
+        if (map.getLayer && map.getLayer(clusterCountLayerId)) {
+          map.removeLayer(clusterCountLayerId);
+          console.log('[VesselLayer] Removed existing layer:', clusterCountLayerId);
+        }
+      } catch (error) {
+        console.warn('[VesselLayer] Error removing existing layers:', error);
+        // Continue anyway - layers might not exist yet
       }
-      if (map.getLayer && map.getLayer(clusterCountLayerId)) {
-        map.removeLayer(clusterCountLayerId);
-        console.log('[VesselLayer] Removed existing layer:', clusterCountLayerId);
-      }
-    } catch (error) {
-      console.warn('[VesselLayer] Error removing existing layers:', error);
-      // Continue anyway - layers might not exist yet
-    }
 
     // Add or update vessel source
     const existingSource = map.getSource(sourceId);
@@ -366,111 +384,234 @@ export function VesselLayer({ map, vessels, tenantVessels = [], onVesselClick, o
       console.error('[VesselLayer] ❌ Error adding cluster count layer:', error);
     }
 
-    // Add individual vessel markers (non-clustered)
-    // Use color-coded circles for now (can be enhanced with custom icons later)
-    try {
-      if (!map.getLayer(layerId)) {
-        map.addLayer({
-          id: layerId,
-          type: 'circle',
-          source: sourceId,
-          filter: ['!', ['has', 'point_count']],
-          paint: {
-            'circle-radius': 8,
-            'circle-color': ['get', 'color'],
-            'circle-stroke-width': 2,
-            'circle-stroke-color': '#fff',
-            'circle-opacity': 0.9,
-          },
-        });
-        console.log('[VesselLayer] ✅ Vessel layer added');
+    // Function to add symbol layer for vessels (called after icon is ready)
+    const addVesselSymbolLayer = () => {
+      try {
+        // Remove existing circle layer if it exists (for migration)
+        if (map.getLayer && map.getLayer(layerId)) {
+          map.removeLayer(layerId);
+        }
+        
+        // Add symbol layer with oriented vessel icons
+        if (!map.getLayer(layerId)) {
+          map.addLayer({
+            id: layerId,
+            type: 'symbol',
+            source: sourceId,
+            filter: ['!', ['has', 'point_count']], // Only non-clustered points
+            layout: {
+              'icon-image': iconId,
+              'icon-size': 0.8, // Scale factor
+              'icon-rotate': ['get', 'rotation'], // Rotate based on COG/heading
+              'icon-rotation-alignment': 'map', // Rotate with map (not viewport)
+              'icon-allow-overlap': true, // Always show vessels (don't hide on overlap)
+              'icon-ignore-placement': true, // Don't prevent other symbols from showing
+            },
+            paint: {
+              'icon-color': ['get', 'color'], // Data-driven color from vessel properties
+              'icon-opacity': 0.95,
+              'icon-halo-color': '#ffffff', // White halo for contrast
+              'icon-halo-width': 1.5,
+              'icon-halo-blur': 1,
+            },
+          });
+          console.log('[VesselLayer] ✅ Vessel symbol layer added (MarineTraffic-style)');
+        }
+      } catch (error) {
+        console.error('[VesselLayer] ❌ Error adding vessel symbol layer:', error);
+        // Fallback to circle layer if symbol layer fails
+        try {
+          if (!map.getLayer(layerId)) {
+            map.addLayer({
+              id: layerId,
+              type: 'circle',
+              source: sourceId,
+              filter: ['!', ['has', 'point_count']],
+              paint: {
+                'circle-radius': 8,
+                'circle-color': ['get', 'color'],
+                'circle-stroke-width': 2,
+                'circle-stroke-color': '#fff',
+                'circle-opacity': 0.9,
+              },
+            });
+            console.log('[VesselLayer] ✅ Fallback circle layer added');
+          }
+        } catch (fallbackError) {
+          console.error('[VesselLayer] ❌ Error adding fallback circle layer:', fallbackError);
+        }
       }
-    } catch (error) {
-      console.error('[VesselLayer] ❌ Error adding vessel layer:', error);
-    }
+    };
 
-    // Create a single vessel icon image (reusable for all vessels)
-    // We'll use a generic icon and apply rotation via layout property
-    const iconId = 'vessel-icon-generic';
+    // Create MarineTraffic-style vessel icon (SDF format for data-driven colors)
+    // SDF (Signed Distance Field) allows us to change icon color dynamically
+    const iconId = 'vessel-icon-sdf';
     
+    // Create icon only if it doesn't exist
     if (!map.hasImage(iconId)) {
-      const size = 24;
-      const arrowPath = `
-        M ${size * 0.5} 0
-        L ${size * 0.85} ${size * 0.5}
-        L ${size * 0.75} ${size * 0.7}
-        L ${size * 0.65} ${size * 0.85}
-        L ${size * 0.35} ${size * 0.85}
-        L ${size * 0.25} ${size * 0.7}
-        L ${size * 0.15} ${size * 0.5}
-        Z
-      `;
-
-      const svg = `
-        <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <filter id="vessel-shadow">
-              <feDropShadow dx="0" dy="1" stdDeviation="1" flood-opacity="0.3"/>
-            </filter>
-          </defs>
-          <path d="${arrowPath}" fill="#3b82f6" stroke="white" stroke-width="1.5" opacity="0.95" filter="url(#vessel-shadow)"/>
-          <circle cx="${size * 0.5}" cy="${size * 0.3}" r="${size * 0.12}" fill="white" opacity="0.9"/>
-        </svg>
-      `;
-
-      // Convert SVG to image and add to map
-      const img = new Image();
-      const svgBlob = new Blob([svg], { type: 'image/svg+xml' });
-      const url = URL.createObjectURL(svgBlob);
+      const size = 32; // Icon size in pixels
+      const padding = 2; // Padding for SDF
+      const canvas = document.createElement('canvas');
+      canvas.width = size + padding * 2;
+      canvas.height = size + padding * 2;
+      const ctx = canvas.getContext('2d');
       
+      // Draw ship shape (triangle pointing up, like MarineTraffic)
+      // Center the drawing in the canvas
+      const centerX = (size + padding * 2) / 2;
+      const centerY = (size + padding * 2) / 2;
+      
+      ctx.fillStyle = '#ffffff'; // White for SDF (will be colored via icon-color)
+      ctx.strokeStyle = '#000000'; // Black outline for contrast
+      ctx.lineWidth = 1.5;
+      
+      // Draw ship triangle (pointing up = heading 0°)
+      ctx.beginPath();
+      ctx.moveTo(centerX, centerY - size * 0.4); // Top point (bow)
+      ctx.lineTo(centerX + size * 0.3, centerY + size * 0.3); // Bottom right (stern)
+      ctx.lineTo(centerX - size * 0.3, centerY + size * 0.3); // Bottom left (stern)
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      
+      // Add small circle at center (like MarineTraffic)
+      ctx.beginPath();
+      ctx.arc(centerX, centerY - size * 0.1, size * 0.08, 0, 2 * Math.PI);
+      ctx.fillStyle = '#000000'; // Black center dot
+      ctx.fill();
+      
+      // Convert canvas to image and add to map as SDF
+      const img = new Image();
       img.onload = () => {
-        if (!map.hasImage(iconId)) {
-          map.addImage(iconId, img);
+        // Check if map still exists and is valid
+        if (!map || !map.isStyleLoaded || typeof map.addImage !== 'function') {
+          console.warn('[VesselLayer] Map not available when icon loaded');
+          return;
         }
-        URL.revokeObjectURL(url);
+        
+        if (!map.hasImage(iconId)) {
+          try {
+            // Add as SDF image to enable data-driven coloring
+            map.addImage(iconId, img, { sdf: true });
+            console.log('[VesselLayer] ✅ Vessel icon (SDF) added to map');
+            
+            // After icon is added, add the symbol layer
+            addVesselSymbolLayer();
+          } catch (error) {
+            console.error('[VesselLayer] ❌ Error adding icon to map:', error);
+          }
+        } else {
+          // Icon already added, just add the layer
+          addVesselSymbolLayer();
+        }
       };
-      img.src = url;
+      img.onerror = (error) => {
+        console.error('[VesselLayer] ❌ Error loading vessel icon image:', error);
+        // Fallback to circle layer if icon fails to load
+        addVesselSymbolLayer();
+      };
+      img.src = canvas.toDataURL();
+    } else {
+      // Icon already exists, just add the symbol layer
+      addVesselSymbolLayer();
     }
 
-    // Handle clicks on clusters
-    map.on('click', clusterLayerId, (e) => {
-      const features = map.queryRenderedFeatures(e.point, {
-        layers: [clusterLayerId],
-      });
-
-      const clusterId = features[0].properties.cluster_id;
-      const source = map.getSource(sourceId);
-
-      source.getClusterExpansionZoom(clusterId, (err, zoom) => {
-        if (err) return;
-
-        map.easeTo({
-          center: features[0].geometry.coordinates,
-          zoom: zoom,
-        });
-      });
-    });
-
-    // Handle clicks on individual vessels
-    map.on('click', layerId, (e) => {
-      const feature = e.features[0];
-      if (feature && feature.properties.vesselData) {
-        if (onVesselClick) {
-          onVesselClick(feature.properties.vesselData);
-        }
+      // Remove existing event handlers to prevent duplicates
+      if (eventHandlersRef.current.clusterClick) {
+        map.off('click', clusterLayerId, eventHandlersRef.current.clusterClick);
       }
-    });
+      if (eventHandlersRef.current.vesselClick) {
+        map.off('click', layerId, eventHandlersRef.current.vesselClick);
+      }
+      if (eventHandlersRef.current.vesselMouseEnter) {
+        map.off('mouseenter', layerId, eventHandlersRef.current.vesselMouseEnter);
+      }
+      if (eventHandlersRef.current.vesselMouseLeave) {
+        map.off('mouseleave', layerId, eventHandlersRef.current.vesselMouseLeave);
+      }
 
-    // Handle hover on vessels
-    map.on('mouseenter', layerId, () => {
-      map.getCanvas().style.cursor = 'pointer';
-    });
+      // Handle clicks on clusters
+      const clusterClickHandler = (e) => {
+        const features = map.queryRenderedFeatures(e.point, {
+          layers: [clusterLayerId],
+        });
 
-    map.on('mouseleave', layerId, () => {
-      map.getCanvas().style.cursor = '';
-    });
+        if (features.length === 0) return;
 
-    // Cleanup
+        const clusterId = features[0].properties.cluster_id;
+        const source = map.getSource(sourceId);
+
+        if (!source || typeof source.getClusterExpansionZoom !== 'function') return;
+
+        source.getClusterExpansionZoom(clusterId, (err, zoom) => {
+          if (err) return;
+
+          map.easeTo({
+            center: features[0].geometry.coordinates,
+            zoom: zoom,
+          });
+        });
+      };
+      map.on('click', clusterLayerId, clusterClickHandler);
+      eventHandlersRef.current.clusterClick = clusterClickHandler;
+
+      // Handle clicks on individual vessels
+      const vesselClickHandler = (e) => {
+        const feature = e.features[0];
+        if (feature && feature.properties.vesselData) {
+          if (onVesselClick) {
+            onVesselClick(feature.properties.vesselData);
+          }
+        }
+      };
+      map.on('click', layerId, vesselClickHandler);
+      eventHandlersRef.current.vesselClick = vesselClickHandler;
+
+      // Handle hover on vessels
+      const vesselMouseEnterHandler = () => {
+        map.getCanvas().style.cursor = 'pointer';
+      };
+      map.on('mouseenter', layerId, vesselMouseEnterHandler);
+      eventHandlersRef.current.vesselMouseEnter = vesselMouseEnterHandler;
+
+      const vesselMouseLeaveHandler = () => {
+        map.getCanvas().style.cursor = '';
+      };
+      map.on('mouseleave', layerId, vesselMouseLeaveHandler);
+      eventHandlersRef.current.vesselMouseLeave = vesselMouseLeaveHandler;
+    };
+
+    // Check if style is loaded, if not wait for it
+    if (!map.isStyleLoaded || !map.isStyleLoaded()) {
+      console.log('[VesselLayer] Style not loaded yet, waiting for style.load event');
+      
+      // Remove any existing style load handler
+      if (eventHandlersRef.current.styleLoad) {
+        map.off('style.load', eventHandlersRef.current.styleLoad);
+      }
+
+      // Register one-time handler for style load
+      const styleLoadHandler = () => {
+        console.log('[VesselLayer] Style loaded, initializing vessel layers');
+        eventHandlersRef.current.styleLoad = null; // Clear ref after use
+        initializeVesselLayers();
+      };
+      map.once('style.load', styleLoadHandler);
+      eventHandlersRef.current.styleLoad = styleLoadHandler;
+
+      // Cleanup function for style load handler
+      return () => {
+        if (eventHandlersRef.current.styleLoad && map && typeof map.off === 'function') {
+          map.off('style.load', eventHandlersRef.current.styleLoad);
+          eventHandlersRef.current.styleLoad = null;
+        }
+      };
+    }
+
+    // Style is already loaded, initialize immediately
+    initializeVesselLayers();
+
+    // Cleanup function
     return () => {
       // CRITICAL: Check if map exists and is still valid before cleanup
       if (!map) {
@@ -483,6 +624,28 @@ export function VesselLayer({ map, vessels, tenantVessels = [], onVesselClick, o
       }
       
       try {
+        // Remove event handlers
+        if (eventHandlersRef.current.clusterClick) {
+          map.off('click', clusterLayerId, eventHandlersRef.current.clusterClick);
+          eventHandlersRef.current.clusterClick = null;
+        }
+        if (eventHandlersRef.current.vesselClick) {
+          map.off('click', layerId, eventHandlersRef.current.vesselClick);
+          eventHandlersRef.current.vesselClick = null;
+        }
+        if (eventHandlersRef.current.vesselMouseEnter) {
+          map.off('mouseenter', layerId, eventHandlersRef.current.vesselMouseEnter);
+          eventHandlersRef.current.vesselMouseEnter = null;
+        }
+        if (eventHandlersRef.current.vesselMouseLeave) {
+          map.off('mouseleave', layerId, eventHandlersRef.current.vesselMouseLeave);
+          eventHandlersRef.current.vesselMouseLeave = null;
+        }
+        if (eventHandlersRef.current.styleLoad) {
+          map.off('style.load', eventHandlersRef.current.styleLoad);
+          eventHandlersRef.current.styleLoad = null;
+        }
+
         // Check each layer exists before trying to remove it
         if (map.getLayer && map.getLayer(layerId)) {
           map.removeLayer(layerId);
