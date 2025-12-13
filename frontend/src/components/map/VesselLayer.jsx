@@ -133,6 +133,8 @@ export function VesselLayer({ map, vessels, tenantVessels = [], onVesselClick, o
             lat,
             lon,
             positionData,
+            hasLat,
+            hasLon,
           });
           return null;
         }
@@ -241,6 +243,14 @@ export function VesselLayer({ map, vessels, tenantVessels = [], onVesselClick, o
     };
   }, [vessels, tenantVesselSet]);
 
+  useEffect(() => {
+    if (vesselGeoJSON.features.length > 0) {
+      console.log('[VesselLayer] DEBUG: vesselGeoJSON updated with features:', vesselGeoJSON);
+    } else {
+      console.log('[VesselLayer] DEBUG: vesselGeoJSON updated, but no features.', vesselGeoJSON);
+    }
+  }, [vesselGeoJSON]);
+
   // Store event handlers in refs to prevent duplicates and enable cleanup
   const eventHandlersRef = useRef({
     clusterClick: null,
@@ -344,6 +354,20 @@ export function VesselLayer({ map, vessels, tenantVessels = [], onVesselClick, o
           vesselGeoJSON: vesselGeoJSON,
         });
         return; // Can't continue without source
+      }
+    } else {
+      // Source exists - update it with new data
+      try {
+        const source = map.getSource(sourceId);
+        if (source && typeof source.setData === 'function') {
+          console.log('[VesselLayer] Updating existing source with', vesselGeoJSON.features.length, 'features');
+          source.setData(vesselGeoJSON);
+          console.log('[VesselLayer] ✅ Source data updated successfully');
+        } else {
+          console.warn('[VesselLayer] Source exists but setData method not available');
+        }
+      } catch (error) {
+        console.error('[VesselLayer] ❌ Error updating source data:', error);
       }
     }
 
