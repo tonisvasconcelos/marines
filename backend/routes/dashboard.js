@@ -349,6 +349,17 @@ router.get('/active-vessels', async (req, res) => {
     })),
   });
   
+  // Log the actual response being sent (first vessel as sample)
+  if (activeVessels.length > 0) {
+    console.log(`[dashboard/active-vessels] Sample response vessel:`, {
+      id: activeVessels[0].id,
+      name: activeVessels[0].name,
+      hasPosition: !!activeVessels[0].position,
+      position: activeVessels[0].position,
+      positionKeys: activeVessels[0].position ? Object.keys(activeVessels[0].position) : null,
+    });
+  }
+  
   res.json(activeVessels);
   } catch (error) {
     console.error('[Dashboard] Error in active-vessels endpoint:', error);
