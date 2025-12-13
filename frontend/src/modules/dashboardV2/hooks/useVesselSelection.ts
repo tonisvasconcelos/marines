@@ -4,7 +4,7 @@
  * Coordinates between sidebar and map
  */
 
-import { useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Vessel } from './useStoredVessels';
 
 export interface UseVesselSelectionResult {

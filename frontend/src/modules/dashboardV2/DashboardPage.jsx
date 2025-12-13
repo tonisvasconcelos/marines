@@ -40,7 +40,7 @@ export function DashboardPage() {
     return (
       <div className={styles.errorContainer}>
         <h2>Error loading vessels</h2>
-        <p>{error.message}</p>
+        <p>{error.message || String(error)}</p>
       </div>
     );
   }
