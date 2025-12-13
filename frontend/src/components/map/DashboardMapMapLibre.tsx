@@ -174,6 +174,77 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, ten
     }
   }, [vessels]);
 
+  // Auto-fit bounds when vessels are loaded (after initial map load)
+  useEffect(() => {
+    if (!mapRef.current || !enrichedVessels || enrichedVessels.length === 0) {
+      return;
+    }
+
+    // Only auto-fit if user hasn't interacted with the map
+    if (hasUserInteractedRef.current || initialBoundsSetRef.current) {
+      return;
+    }
+
+    // Wait for map to be ready
+    if (!mapRef.current.isStyleLoaded || !mapRef.current.isStyleLoaded()) {
+      console.log('[DashboardMapMapLibre] Map style not ready yet, waiting to fit bounds');
+      const checkAndFit = () => {
+        if (mapRef.current && mapRef.current.isStyleLoaded && mapRef.current.isStyleLoaded()) {
+          fitBoundsToVessels();
+        }
+      };
+      mapRef.current.once('style.load', checkAndFit);
+      mapRef.current.once('load', checkAndFit);
+      return;
+    }
+
+    fitBoundsToVessels();
+  }, [enrichedVessels]);
+
+  // Helper function to fit bounds to vessels
+  const fitBoundsToVessels = useCallback(() => {
+    if (!mapRef.current || !enrichedVessels || enrichedVessels.length === 0) {
+      return;
+    }
+
+    const bounds: [number, number][] = [];
+    enrichedVessels.forEach((vessel) => {
+      if (vessel.position) {
+        const normalizedPos = normalizeVesselPosition({
+          ...vessel.position,
+          vesselName: vessel.name,
+        });
+        if (normalizedPos) {
+          bounds.push([normalizedPos.lon, normalizedPos.lat]); // [lon, lat] for MapLibre
+        }
+      }
+    });
+
+    if (bounds.length > 0) {
+      const lons = bounds.map(b => b[0]);
+      const lats = bounds.map(b => b[1]);
+      const bbox = [
+        [Math.min(...lons), Math.min(...lats)],
+        [Math.max(...lons), Math.max(...lats)],
+      ];
+      
+      console.log('[DashboardMapMapLibre] Fitting bounds to vessels:', {
+        vesselCount: enrichedVessels.length,
+        bounds: bbox,
+        minLon: Math.min(...lons),
+        maxLon: Math.max(...lons),
+        minLat: Math.min(...lats),
+        maxLat: Math.max(...lats),
+      });
+      
+      mapRef.current.fitBounds(bbox, { 
+        padding: 50,
+        duration: 1000, // Smooth animation
+      });
+      initialBoundsSetRef.current = true;
+    }
+  }, [enrichedVessels]);
+
   // Handle layers change (multi-selection)
   const handleLayersChange = useCallback((newSelectedLayers) => {
     setSelectedLayers(newSelectedLayers);
