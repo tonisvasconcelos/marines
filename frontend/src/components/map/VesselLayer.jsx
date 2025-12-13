@@ -281,17 +281,22 @@ export function VesselLayer({ map, vessels, tenantVessels = [], onVesselClick, o
 
       // Remove existing layers first (with safety checks)
       try {
+        const symbolLayerId = `${layerId}-symbol`;
+        if (map.getLayer && map.getLayer(symbolLayerId)) {
+          map.removeLayer(symbolLayerId);
+          console.log('[VesselLayer] Removed existing symbol layer:', symbolLayerId);
+        }
         if (map.getLayer && map.getLayer(layerId)) {
           map.removeLayer(layerId);
-          console.log('[VesselLayer] Removed existing layer:', layerId);
+          console.log('[VesselLayer] Removed existing circle layer:', layerId);
         }
         if (map.getLayer && map.getLayer(clusterLayerId)) {
           map.removeLayer(clusterLayerId);
-          console.log('[VesselLayer] Removed existing layer:', clusterLayerId);
+          console.log('[VesselLayer] Removed existing cluster layer:', clusterLayerId);
         }
         if (map.getLayer && map.getLayer(clusterCountLayerId)) {
           map.removeLayer(clusterCountLayerId);
-          console.log('[VesselLayer] Removed existing layer:', clusterCountLayerId);
+          console.log('[VesselLayer] Removed existing cluster count layer:', clusterCountLayerId);
         }
       } catch (error) {
         console.warn('[VesselLayer] Error removing existing layers:', error);
@@ -432,8 +437,11 @@ export function VesselLayer({ map, vessels, tenantVessels = [], onVesselClick, o
         return;
       }
 
+      const symbolLayerId = `${layerId}-symbol`;
+
       try {
         // Always add circle layer first (works without icons, ensures vessels are visible)
+        // Use zoom-dependent radius so vessels are visible at all zoom levels
         if (!map.getLayer(layerId)) {
           map.addLayer({
             id: layerId,
@@ -441,47 +449,63 @@ export function VesselLayer({ map, vessels, tenantVessels = [], onVesselClick, o
             source: sourceId,
             filter: ['!', ['has', 'point_count']],
             paint: {
-              'circle-radius': 8,
+              'circle-radius': [
+                'interpolate',
+                ['linear'],
+                ['zoom'],
+                0, 6,   // At zoom 0, radius 6px
+                5, 8,   // At zoom 5, radius 8px
+                10, 10, // At zoom 10, radius 10px
+                15, 12, // At zoom 15, radius 12px
+              ],
               'circle-color': ['get', 'color'],
               'circle-stroke-width': 2,
               'circle-stroke-color': '#fff',
-              'circle-opacity': 0.9,
+              'circle-opacity': 1.0, // Full opacity for better visibility
             },
           });
           console.log('[VesselLayer] ✅ Circle layer added (vessels will be visible)');
         }
         
         // Try to upgrade to symbol layer if icon is available
+        // Keep circle layer as fallback by adding symbol layer on top instead of replacing
         const iconExists = map.hasImage(iconId);
         if (iconExists) {
           try {
-            // Remove circle layer and replace with symbol layer
-            if (map.getLayer(layerId)) {
-              map.removeLayer(layerId);
-            }
+            // Add symbol layer on top of circle layer (both will be visible, symbol on top)
+            // This ensures vessels are always visible even if icons don't render
+            if (!map.getLayer(symbolLayerId)) {
             
-            map.addLayer({
-              id: layerId,
-              type: 'symbol',
-              source: sourceId,
-              filter: ['!', ['has', 'point_count']], // Only non-clustered points
-              layout: {
-                'icon-image': iconId,
-                'icon-size': 0.8, // Scale factor
-                'icon-rotate': ['get', 'rotation'], // Rotate based on COG/heading
-                'icon-rotation-alignment': 'map', // Rotate with map (not viewport)
-                'icon-allow-overlap': true, // Always show vessels (don't hide on overlap)
-                'icon-ignore-placement': true, // Don't prevent other symbols from showing
-              },
-              paint: {
-                'icon-color': ['get', 'color'], // Data-driven color from vessel properties
-                'icon-opacity': 0.95,
-                'icon-halo-color': '#ffffff', // White halo for contrast
-                'icon-halo-width': 1.5,
-                'icon-halo-blur': 1,
-              },
-            });
-            console.log('[VesselLayer] ✅ Upgraded to symbol layer (MarineTraffic-style with icon)');
+              map.addLayer({
+                id: symbolLayerId,
+                type: 'symbol',
+                source: sourceId,
+                filter: ['!', ['has', 'point_count']], // Only non-clustered points
+                layout: {
+                  'icon-image': iconId,
+                  'icon-size': [
+                    'interpolate',
+                    ['linear'],
+                    ['zoom'],
+                    0, 1.0,   // At zoom 0, size 1.0
+                    5, 1.2,  // At zoom 5, size 1.2
+                    10, 1.5, // At zoom 10, size 1.5
+                    15, 2.0, // At zoom 15, size 2.0
+                  ],
+                  'icon-rotate': ['get', 'rotation'], // Rotate based on COG/heading
+                  'icon-rotation-alignment': 'map', // Rotate with map (not viewport)
+                  'icon-allow-overlap': true, // Always show vessels (don't hide on overlap)
+                  'icon-ignore-placement': true, // Don't prevent other symbols from showing
+                },
+                paint: {
+                  'icon-color': ['get', 'color'], // Data-driven color from vessel properties
+                  'icon-opacity': 1.0, // Full opacity for better visibility
+                  'icon-halo-color': '#ffffff', // White halo for contrast
+                  'icon-halo-width': 2.0, // Increased halo width for better visibility
+                  'icon-halo-blur': 1.5,
+                },
+              });
+              console.log('[VesselLayer] ✅ Symbol layer added on top of circle layer (vessels visible with icons)');
           } catch (symbolError) {
             console.warn('[VesselLayer] ⚠️ Could not upgrade to symbol layer, keeping circle layer:', symbolError);
             // Circle layer is already added, so vessels are still visible
@@ -626,7 +650,7 @@ export function VesselLayer({ map, vessels, tenantVessels = [], onVesselClick, o
       map.on('click', clusterLayerId, clusterClickHandler);
       eventHandlersRef.current.clusterClick = clusterClickHandler;
 
-      // Handle clicks on individual vessels
+      // Handle clicks on individual vessels (attach to both circle and symbol layers)
       const vesselClickHandler = (e) => {
         const feature = e.features[0];
         if (feature && feature.properties.vesselData) {
@@ -635,20 +659,32 @@ export function VesselLayer({ map, vessels, tenantVessels = [], onVesselClick, o
           }
         }
       };
+      // Attach to circle layer (always exists)
       map.on('click', layerId, vesselClickHandler);
+      // Also attach to symbol layer if it exists
+      const symbolLayerId = `${layerId}-symbol`;
+      if (map.getLayer(symbolLayerId)) {
+        map.on('click', symbolLayerId, vesselClickHandler);
+      }
       eventHandlersRef.current.vesselClick = vesselClickHandler;
 
-      // Handle hover on vessels
+      // Handle hover on vessels (attach to both layers)
       const vesselMouseEnterHandler = () => {
         map.getCanvas().style.cursor = 'pointer';
       };
       map.on('mouseenter', layerId, vesselMouseEnterHandler);
+      if (map.getLayer(symbolLayerId)) {
+        map.on('mouseenter', symbolLayerId, vesselMouseEnterHandler);
+      }
       eventHandlersRef.current.vesselMouseEnter = vesselMouseEnterHandler;
 
       const vesselMouseLeaveHandler = () => {
         map.getCanvas().style.cursor = '';
       };
       map.on('mouseleave', layerId, vesselMouseLeaveHandler);
+      if (map.getLayer(symbolLayerId)) {
+        map.on('mouseleave', symbolLayerId, vesselMouseLeaveHandler);
+      }
       eventHandlersRef.current.vesselMouseLeave = vesselMouseLeaveHandler;
     };
 
@@ -700,16 +736,26 @@ export function VesselLayer({ map, vessels, tenantVessels = [], onVesselClick, o
           map.off('click', clusterLayerId, eventHandlersRef.current.clusterClick);
           eventHandlersRef.current.clusterClick = null;
         }
+        const symbolLayerId = `${layerId}-symbol`;
         if (eventHandlersRef.current.vesselClick) {
           map.off('click', layerId, eventHandlersRef.current.vesselClick);
+          if (map.getLayer(symbolLayerId)) {
+            map.off('click', symbolLayerId, eventHandlersRef.current.vesselClick);
+          }
           eventHandlersRef.current.vesselClick = null;
         }
         if (eventHandlersRef.current.vesselMouseEnter) {
           map.off('mouseenter', layerId, eventHandlersRef.current.vesselMouseEnter);
+          if (map.getLayer(symbolLayerId)) {
+            map.off('mouseenter', symbolLayerId, eventHandlersRef.current.vesselMouseEnter);
+          }
           eventHandlersRef.current.vesselMouseEnter = null;
         }
         if (eventHandlersRef.current.vesselMouseLeave) {
           map.off('mouseleave', layerId, eventHandlersRef.current.vesselMouseLeave);
+          if (map.getLayer(symbolLayerId)) {
+            map.off('mouseleave', symbolLayerId, eventHandlersRef.current.vesselMouseLeave);
+          }
           eventHandlersRef.current.vesselMouseLeave = null;
         }
         if (eventHandlersRef.current.styleLoad) {
@@ -718,6 +764,10 @@ export function VesselLayer({ map, vessels, tenantVessels = [], onVesselClick, o
         }
 
         // Check each layer exists before trying to remove it
+        const symbolLayerId = `${layerId}-symbol`;
+        if (map.getLayer && map.getLayer(symbolLayerId)) {
+          map.removeLayer(symbolLayerId);
+        }
         if (map.getLayer && map.getLayer(layerId)) {
           map.removeLayer(layerId);
         }
