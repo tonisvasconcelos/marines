@@ -37,22 +37,17 @@ function PortCallDetail() {
     queryFn: () => api.get('/ops-sites'),
   });
 
-  // CRITICAL: Use stored positions from database to save AIS API credits
+  // CRITICAL: Use stored positions from database ONLY - no automatic AIS API calls
   // Only fetch from AIS API when user explicitly requests it (manual refresh)
   // For automatic display, use stored positions from vessel_position_history
   const { data: aisPosition } = useQuery({
-    queryKey: ['vessel', 'position', portCall?.vesselId],
+    queryKey: ['vessel', 'position-history', portCall?.vesselId, 'latest'],
     queryFn: () => {
-      // Use /vessels/:id/position which tries stored position first, then AIS API as fallback
-      // But we'll prefer stored positions by checking position-history first
+      // Use ONLY stored positions from position-history - never call AIS API automatically
       return api.get(`/vessels/${portCall.vesselId}/position-history?limit=1`)
         .then((history) => {
-          // Return latest stored position if available
-          if (history && history.length > 0) {
-            return history[0];
-          }
-          // Fallback to position endpoint (which will try stored, then AIS)
-          return api.get(`/vessels/${portCall.vesselId}/position`);
+          // Return latest stored position if available, or null if none exists
+          return history && history.length > 0 ? history[0] : null;
         });
     },
     enabled: !!portCall?.vesselId,

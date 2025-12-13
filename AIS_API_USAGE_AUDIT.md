@@ -50,7 +50,13 @@ This document tracks all AIS API calls in the application to ensure no automatic
 
 ## ✅ FIXED - Now Using Stored Positions
 
-### 1. Dashboard Map - Active Vessels
+### 1. MiniPopup Component
+- **File:** `frontend/src/components/map/MiniPopup.tsx`
+- **Previous:** Automatically called `getVesselStatus`, `getVesselsNearby`, and `getVesselTrack` when popup opened
+- **Current:** ✅ All automatic AIS queries disabled - uses stored vessel data from props only
+- **Status:** ✅ FIXED - No automatic AIS API calls
+
+### 2. Dashboard Map - Active Vessels
 - **File:** `frontend/src/pages/Dashboard.jsx` + `backend/routes/dashboard.js`
 - **Endpoint:** `/dashboard/active-vessels`
 - **Previous:** Would call AIS API for each vessel
@@ -58,19 +64,19 @@ This document tracks all AIS API calls in the application to ensure no automatic
 - **Status:** ✅ FIXED - No automatic AIS calls
 - **Note:** Line 134-161 in `dashboard.js` explicitly uses `getLatestPosition` from database
 
-### 2. Dashboard Map Component
+### 3. Dashboard Map Component
 - **File:** `frontend/src/components/map/DashboardMapMapLibre.tsx`
 - **Previous:** Would call zone API automatically
 - **Current:** ✅ Explicitly disabled automatic zone API calls (line 35-42)
 - **Status:** ✅ FIXED - Comment states "DISABLED: Automatic zone API calls to save credits"
 
-### 3. Fleet Map
+### 4. Fleet Map
 - **File:** `frontend/src/pages/FleetMap.jsx`
 - **Previous:** Automatically called `/ais/vessels/:id/last-position` for each port call on mount
 - **Current:** ✅ Uses `/vessels/:id/position-history?limit=1` (stored positions only)
 - **Status:** ✅ FIXED - No automatic AIS API calls
 
-### 4. Port Call Detail
+### 5. Port Call Detail
 - **File:** `frontend/src/pages/PortCalls/PortCallDetail.jsx`
 - **Previous:** Automatically queried AIS API on component mount
 - **Current:** ✅ Uses stored positions from `position-history` endpoint
