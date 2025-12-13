@@ -506,6 +506,7 @@ export function VesselLayer({ map, vessels, tenantVessels = [], onVesselClick, o
                 },
               });
               console.log('[VesselLayer] ✅ Symbol layer added on top of circle layer (vessels visible with icons)');
+            }
           } catch (symbolError) {
             console.warn('[VesselLayer] ⚠️ Could not upgrade to symbol layer, keeping circle layer:', symbolError);
             // Circle layer is already added, so vessels are still visible
