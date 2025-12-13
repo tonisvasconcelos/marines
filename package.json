@@ -14,9 +14,12 @@
     "install:all": "npm install && cd frontend && npm install && cd ../backend && npm install"
   },
   "devDependencies": {
+    "@rollup/plugin-commonjs": "^29.0.0",
     "concurrently": "^8.2.2"
   },
   "dependencies": {
+    "@tanstack/react-query": "^4.42.0",
+    "@tanstack/react-query-devtools": "^4.42.0",
     "react-icons": "^5.5.0"
   }
 }

@@ -1,0 +1,53 @@
+/**
+ * Dashboard Styles
+ * Dark theme, full-screen layout
+ * Flightradar24-style
+ */
+
+.dashboard {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background-color: #0f172a; /* slate-900 */
+  color: #f1f5f9; /* slate-100 */
+}
+
+.mapWrapper {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+.sidebarWrapper {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 10;
+  pointer-events: none; /* Allow map interaction */
+}
+
+.errorContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  color: #f1f5f9;
+}
+
+.errorContainer h2 {
+  font-size: 24px;
+  margin-bottom: 16px;
+  color: #ef4444; /* red-500 */
+}
+
+.errorContainer p {
+  font-size: 16px;
+  color: #94a3b8; /* slate-400 */
+}

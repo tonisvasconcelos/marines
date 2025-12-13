@@ -1,0 +1,193 @@
+/**
+ * Sidebar Styles
+ * Floating left sidebar with glassmorphism
+ * Flightradar24-style
+ */
+
+.sidebar {
+  width: 350px;
+  max-width: calc(100vw - 40px);
+  height: 100vh;
+  background: rgba(30, 41, 59, 0.95); /* slate-800 with opacity */
+  backdrop-filter: blur(10px);
+  border-right: 1px solid rgba(148, 163, 184, 0.3); /* slate-400 */
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.3);
+  pointer-events: auto; /* Re-enable for sidebar */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebarHeader {
+  padding: 20px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.sidebarTitle {
+  font-size: 18px;
+  font-weight: 700;
+  color: #f1f5f9; /* slate-100 */
+  margin: 0 0 8px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.vesselCount {
+  font-size: 12px;
+  color: #94a3b8; /* slate-400 */
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Search */
+.searchContainer {
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.searchInput {
+  width: 100%;
+  padding: 10px 14px;
+  background: rgba(15, 23, 42, 0.8); /* slate-900 */
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 6px;
+  color: #f1f5f9;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.searchInput:focus {
+  border-color: #3b82f6; /* blue-500 */
+}
+
+.searchInput::placeholder {
+  color: #64748b; /* slate-500 */
+}
+
+/* Vessel List */
+.vesselList {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.vesselList::-webkit-scrollbar {
+  width: 6px;
+}
+
+.vesselList::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.vesselList::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.5);
+  border-radius: 3px;
+}
+
+.vesselList::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.7);
+}
+
+/* Status Groups */
+.statusGroup {
+  margin-bottom: 16px;
+}
+
+.statusGroupHeader {
+  padding: 8px 20px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* Vessel List Item */
+.vesselListItem {
+  padding: 12px 20px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.vesselListItem:hover {
+  background-color: rgba(15, 23, 42, 0.6);
+}
+
+.vesselListItem.selected {
+  background-color: rgba(59, 130, 246, 0.2); /* blue-500 with opacity */
+  border-left: 3px solid #3b82f6; /* blue-500 */
+}
+
+.vesselHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.vesselName {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f1f5f9;
+  margin: 0;
+  flex: 1;
+}
+
+.statusBadge {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #ffffff;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-left: 8px;
+}
+
+.vesselDetails {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.vesselId {
+  margin-bottom: 4px;
+}
+
+.vesselId span {
+  margin-right: 12px;
+}
+
+.vesselType {
+  margin-bottom: 4px;
+  text-transform: capitalize;
+}
+
+.lastUpdate {
+  color: #64748b; /* slate-500 */
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+.noPosition {
+  color: #ef4444; /* red-500 */
+  font-size: 11px;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.emptyState {
+  padding: 40px 20px;
+  text-align: center;
+  color: #64748b;
+  font-size: 14px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .sidebar {
+    width: 100%;
+    max-width: 100vw;
+  }
+}

@@ -7,6 +7,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapEngine } from './MapEngine';
 import { VesselLayer } from './VesselLayer';
+import { OverlayControls } from './OverlayControls';
 import { normalizeVesselPosition } from '../../utils/coordinateUtils';
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore - CSS module exists but TypeScript doesn't have type declarations
@@ -105,6 +106,14 @@ function DashboardMapMapLibre({ vessels, onVesselClick, tenantVessels, showContr
         onBaseLayerChange={handleBaseLayerChange}
         hideBuiltInControls={isDashboardWidget}
       />
+      
+      {/* Layer Switcher Overlay - Top Right */}
+      {showControls && (
+        <OverlayControls
+          baseLayer={selectedLayers[0] || 'standard'}
+          onBaseLayerChange={handleBaseLayerChange}
+        />
+      )}
       
       {/* STEP 3: Plot vessels on the map */}
       {mapRef.current && (

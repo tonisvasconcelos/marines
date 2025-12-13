@@ -2,7 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './modules/auth/AuthContext';
 import Layout from './components/Layout/Layout';
 import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
+import DashboardPage from './modules/dashboardV2/DashboardPage';
 import PortCallsList from './pages/PortCalls/PortCallsList';
 import PortCallDetail from './pages/PortCalls/PortCallDetail';
 import FleetMap from './pages/FleetMap';
@@ -51,7 +51,7 @@ function AppRoutes() {
             <Layout>
               <Routes>
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/port-calls" element={<PortCallsList />} />
                 <Route path="/port-calls/:id" element={<PortCallDetail />} />
                 <Route path="/fleet-map" element={<FleetMap />} />

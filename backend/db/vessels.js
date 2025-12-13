@@ -506,6 +506,8 @@ export async function getLatestPosition(vesselId, tenantId) {
        LIMIT 1`,
       [vesselId, tenantId]
     );
+
+    console.log(`[getLatestPosition] Query result for vessel ${vesselId}:`, result.rows);
     
     if (result.rows.length === 0) {
       return null;
