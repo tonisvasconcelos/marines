@@ -33,18 +33,75 @@ function DashboardMapLeaflet({ vessels = [], onVesselClick }) {
   const mapInstanceRef = useRef(null);
   const markersRef = useRef([]);
 
+  // Initialize map effect
   useEffect(() => {
     if (!mapRef.current) return;
 
-    // Initialize map
-    if (!mapInstanceRef.current) {
-      mapInstanceRef.current = L.map(mapRef.current).setView([-23.5505, -46.6333], 3);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
-      }).addTo(mapInstanceRef.current);
+    // Check if container has dimensions
+    const container = mapRef.current;
+    const hasDimensions = container.offsetWidth > 0 && container.offsetHeight > 0;
+    
+    if (!hasDimensions) {
+      console.warn('[DashboardMapLeaflet] Map container has no dimensions, retrying...');
+      const timeoutId = setTimeout(() => {
+        if (mapRef.current && mapRef.current.offsetWidth > 0 && mapRef.current.offsetHeight > 0) {
+          if (!mapInstanceRef.current) {
+            initializeMap();
+          }
+        }
+      }, 200);
+      return () => clearTimeout(timeoutId);
     }
 
+    // Initialize map function
+    const initializeMap = () => {
+      if (!mapRef.current || mapInstanceRef.current) return;
+      
+      console.log('[DashboardMapLeaflet] Initializing map with container dimensions:', {
+        width: mapRef.current.offsetWidth,
+        height: mapRef.current.offsetHeight,
+      });
+      
+      mapInstanceRef.current = L.map(mapRef.current, {
+        zoomControl: true,
+        attributionControl: true,
+      }).setView([-23.5505, -46.6333], 3);
+      
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19,
+      }).addTo(mapInstanceRef.current);
+      
+      // Invalidate size after map is loaded
+      mapInstanceRef.current.whenReady(() => {
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.invalidateSize();
+          console.log('[DashboardMapLeaflet] Map initialized and size invalidated');
+        }
+      });
+    };
+
+    // Initialize map if not already done
+    if (!mapInstanceRef.current) {
+      initializeMap();
+    }
+
+    return () => {
+      // Cleanup handled by map instance
+    };
+  }, []); // Only run once on mount
+
+  // Update markers effect
+  useEffect(() => {
     const map = mapInstanceRef.current;
+    if (!map) return;
+
+    // Invalidate size to ensure map renders correctly
+    setTimeout(() => {
+      if (map) {
+        map.invalidateSize();
+      }
+    }, 100);
 
     // Clear existing markers
     markersRef.current.forEach(marker => {
@@ -128,10 +185,6 @@ function DashboardMapLeaflet({ vessels = [], onVesselClick }) {
         console.warn('[DashboardMapLeaflet] No valid vessel positions to display');
       }
     }
-
-    return () => {
-      // Cleanup handled by map instance
-    };
   }, [vessels, onVesselClick]);
 
   return (
