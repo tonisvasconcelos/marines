@@ -39,40 +39,78 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, ten
     // Simply return database vessels with their stored positions
     // No automatic API calls to save credits
     const vesselList = vessels || [];
-    console.log('[DashboardMapMapLibre] enrichedVessels:', {
-      count: vesselList.length,
+    
+    // Always log to diagnose issues
+    console.log('[DashboardMapMapLibre] enrichedVessels memo:', {
+      inputVessels: vessels,
+      inputVesselsLength: vessels?.length,
+      vesselListLength: vesselList.length,
       vessels: vesselList.map(v => ({
         id: v.id,
         name: v.name,
         hasPosition: !!v.position,
         position: v.position,
+        positionLat: v.position?.lat,
+        positionLon: v.position?.lon,
       })),
     });
+    
     return vesselList;
   }, [vessels]);
+  
+  // Log when enrichedVessels changes
+  useEffect(() => {
+    console.log('[DashboardMapMapLibre] enrichedVessels changed:', {
+      count: enrichedVessels.length,
+      vessels: enrichedVessels,
+    });
+  }, [enrichedVessels]);
 
   // Handle map ready callback
   const handleMapReady = useCallback((map) => {
     mapRef.current = map;
     console.log('[DashboardMapMapLibre] MapLibre map ready');
 
-    // Check if style is already loaded
-    if (map.isStyleLoaded()) {
+    // For custom styles (like the OSM raster style), the 'load' event is more reliable
+    // The MapEngine already fires 'load' when the map is ready, so we can use that
+    const setStyleReady = () => {
+      console.log('[DashboardMapMapLibre] ✅ Setting style ready');
       setIsStyleReady(true);
-    } else {
-      // Wait for style to load
-      map.once('style.load', () => {
-        console.log('[DashboardMapMapLibre] Map style loaded');
-        setIsStyleReady(true);
-      });
+    };
+
+    // Check if style is already loaded
+    if (map.isStyleLoaded && map.isStyleLoaded()) {
+      console.log('[DashboardMapMapLibre] Style already loaded');
+      setStyleReady();
+      return;
     }
+
+    // Listen for 'load' event (fires when map is fully loaded, including custom styles)
+    // This is more reliable for custom raster styles
+    map.once('load', () => {
+      console.log('[DashboardMapMapLibre] Map load event fired - setting style ready');
+      setStyleReady();
+    });
+
+    // Also listen for 'style.load' event (for standard MapLibre vector styles)
+    map.once('style.load', () => {
+      console.log('[DashboardMapMapLibre] Map style.load event fired - setting style ready');
+      setStyleReady();
+    });
+
+    // Fallback: Force ready state after a delay if map is functional
+    // This ensures VesselLayer renders even if style events don't fire
+    setTimeout(() => {
+      if (map && typeof map.getSource === 'function' && typeof map.addSource === 'function') {
+        console.log('[DashboardMapMapLibre] Fallback: Map is functional, forcing style ready');
+        setStyleReady();
+      }
+    }, 500);
 
     // Also listen for style data loading (handles style changes)
     map.on('styledata', () => {
-      if (map.isStyleLoaded()) {
-        setIsStyleReady(true);
-      } else {
-        setIsStyleReady(false);
+      if (map.isStyleLoaded && map.isStyleLoaded()) {
+        setStyleReady();
       }
     });
 
@@ -423,33 +461,31 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, ten
       
       {/* Vessel Layer - renders vessels with clustering */}
       {/* Only shows database vessels with stored positions - no automatic API calls */}
-      {/* Use reactive state instead of ref check to ensure VesselLayer mounts when style is ready */}
-      {(() => {
-        if (isStyleReady && mapRef.current) {
-          console.log('[DashboardMapMapLibre] ✅ Rendering VesselLayer:', {
+      {/* VesselLayer handles style loading internally, so render when map is ready */}
+      {mapRef.current && (
+        <>
+          {console.log('[DashboardMapMapLibre] Rendering VesselLayer:', {
             isStyleReady,
             hasMap: !!mapRef.current,
             vesselCount: enrichedVessels.length,
             vessels: enrichedVessels,
-          });
-          return (
-            <VesselLayer
-              map={mapRef.current}
-              vessels={enrichedVessels} // Database vessels with stored positions only
-              tenantVessels={tenantVessels} // Pass tenant vessels for highlighting
-              onVesselClick={handleVesselClick}
-              onVesselHover={() => {}} // Empty handler - not used in dashboard
-            />
-          );
-        } else {
-          console.log('[DashboardMapMapLibre] ⚠️ VesselLayer NOT rendering:', {
-            isStyleReady,
-            hasMap: !!mapRef.current,
-            vesselCount: enrichedVessels.length,
-          });
-          return null;
-        }
-      })()}
+            vesselDetails: enrichedVessels.map(v => ({
+              id: v.id,
+              name: v.name,
+              hasPosition: !!v.position,
+              position: v.position,
+            })),
+          })}
+          <VesselLayer
+            map={mapRef.current}
+            vessels={enrichedVessels} // Database vessels with stored positions only
+            tenantVessels={tenantVessels} // Pass tenant vessels for highlighting
+            onVesselClick={handleVesselClick}
+            onVesselHover={() => {}} // Empty handler - not used in dashboard
+          />
+        </>
+      )}
+      {!mapRef.current && console.log('[DashboardMapMapLibre] ⚠️ Map not ready, VesselLayer not rendering')}
       
       {/* Vessel Search - Hidden in dashboard widget, only show in fullscreen mode */}
       {showControls && !isDashboardWidget && (
