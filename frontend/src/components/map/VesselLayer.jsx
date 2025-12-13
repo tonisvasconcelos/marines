@@ -731,13 +731,15 @@ export function VesselLayer({ map, vessels, tenantVessels = [], onVesselClick, o
         return;
       }
       
+      // Declare symbolLayerId once at the top of cleanup function
+      const symbolLayerId = `${layerId}-symbol`;
+      
       try {
         // Remove event handlers
         if (eventHandlersRef.current.clusterClick) {
           map.off('click', clusterLayerId, eventHandlersRef.current.clusterClick);
           eventHandlersRef.current.clusterClick = null;
         }
-        const symbolLayerId = `${layerId}-symbol`;
         if (eventHandlersRef.current.vesselClick) {
           map.off('click', layerId, eventHandlersRef.current.vesselClick);
           if (map.getLayer(symbolLayerId)) {
@@ -765,7 +767,6 @@ export function VesselLayer({ map, vessels, tenantVessels = [], onVesselClick, o
         }
 
         // Check each layer exists before trying to remove it
-        const symbolLayerId = `${layerId}-symbol`;
         if (map.getLayer && map.getLayer(symbolLayerId)) {
           map.removeLayer(symbolLayerId);
         }
