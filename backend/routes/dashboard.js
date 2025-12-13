@@ -98,21 +98,45 @@ router.get('/active-vessels', async (req, res) => {
   const { tenantId } = req;
   
   try {
-    // Get vessels from database (with fallback to mock data)
+    // Get vessels from database - NO fallback to mock data in production
+    // If database is empty, return empty array (user should create vessels)
+    // Only use mock data if database table doesn't exist or connection fails
     let vessels;
     try {
       vessels = await vesselDb.getVessels(tenantId);
-      // If database returns empty array and we're using database, fall back to mock
-      if (vessels.length === 0) {
-        console.warn('No vessels in database, falling back to mock data');
-        vessels = getMockVessels(tenantId);
+      console.log(`[dashboard/active-vessels] ✅ Found ${vessels.length} vessels in database for tenant ${tenantId}`);
+      
+      // Log vessel details for debugging
+      if (vessels.length > 0) {
+        console.log(`[dashboard/active-vessels] Vessels from database:`, vessels.map(v => ({
+          id: v.id,
+          name: v.name,
+          imo: v.imo,
+          mmsi: v.mmsi,
+          tenantId: v.tenantId,
+        })));
+      } else {
+        console.log(`[dashboard/active-vessels] ⚠️ No vessels found in database for tenant ${tenantId}. User should create vessels.`);
       }
     } catch (error) {
-      console.error('Error fetching vessels from database, using mock data:', error);
-      vessels = getMockVessels(tenantId);
+      // Check if error is about missing table or connection
+      const isTableMissing = error.message?.includes('relation') || 
+                            error.message?.includes('does not exist') ||
+                            error.code === '42P01';
+      const isConnectionError = error.message?.includes('ECONNREFUSED') ||
+                                error.message?.includes('connection') ||
+                                error.code === 'ECONNREFUSED';
+      
+      if (isTableMissing || isConnectionError) {
+        console.error('[dashboard/active-vessels] ❌ Database table missing or connection error, falling back to mock data:', error.message);
+        vessels = getMockVessels(tenantId);
+      } else {
+        // For other errors (permissions, query errors, etc.), return empty array
+        console.error('[dashboard/active-vessels] ❌ Error fetching vessels from database:', error.message);
+        console.error('[dashboard/active-vessels] Returning empty array (not using mock data)');
+        vessels = [];
+      }
     }
-    
-    console.log(`[dashboard/active-vessels] Found ${vessels.length} vessels in database for tenant ${tenantId}`);
   
   const portCalls = getMockPortCalls(tenantId);
   
