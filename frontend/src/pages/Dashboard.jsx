@@ -24,13 +24,36 @@ function Dashboard() {
     queryFn: () => api.get('/dashboard/stats'),
     refetchInterval: 30000, // Refresh every 30 seconds
     retry: (failureCount, error) => {
-      // Don't retry on auth errors
+      // Don't retry on 401/403 errors (authentication/authorization issues)
       if (error?.message?.includes('Unauthorized') || error?.message?.includes('Forbidden')) {
         return false;
       }
       return failureCount < 1;
     },
   });
+
+  // Demo data based on provided vessel positions (only in development)
+  const demoVessels = import.meta.env.DEV ? [
+    {
+      id: 'demo-akofs-santos',
+      name: 'AKOFS SANTOS',
+      imo: '9423437',
+      mmsi: '710005865',
+      type: 'OFFSHORE',
+      status: 'AT_SEA',
+      tenantId: tenant?.id || 'demo-tenant',
+      position: {
+        lat: -24.481873,
+        lon: -44.217957,
+        latitude: -24.481873,
+        longitude: -44.217957,
+        course: 200,
+        heading: 200,
+        speed: null,
+        timestamp: new Date('2025-12-12T20:50:19').toISOString(),
+      },
+    },
+  ] : [];
 
   const { data: activeVessels, isLoading: vesselsLoading, error: vesselsError } = useQuery({
     queryKey: ['dashboard', 'active-vessels'],
@@ -45,19 +68,26 @@ function Dashboard() {
     },
   });
 
+  // Use demo data if API fails or returns empty, only in development mode
+  const vesselsToDisplay = (activeVessels && activeVessels.length > 0) 
+    ? activeVessels 
+    : (import.meta.env.DEV ? demoVessels : []);
+
   // Always log to diagnose issues
   console.log('[Dashboard] Active vessels:', {
     activeVessels,
+    vesselsToDisplay,
     isLoading: vesselsLoading,
     error: vesselsError,
     count: activeVessels?.length,
-    vesselsWithPositions: activeVessels?.filter(v => {
+    demoCount: demoVessels.length,
+    vesselsWithPositions: vesselsToDisplay?.filter(v => {
       const pos = v.position;
       return pos && (pos.lat != null || pos.latitude != null) && (pos.lon != null || pos.longitude != null || pos.lng != null);
     }).length,
-    sampleVessel: activeVessels?.[0],
-    samplePosition: activeVessels?.[0]?.position,
-    allVesselsWithPositions: activeVessels?.map(v => ({
+    sampleVessel: vesselsToDisplay?.[0],
+    samplePosition: vesselsToDisplay?.[0]?.position,
+    allVesselsWithPositions: vesselsToDisplay?.map(v => ({
       id: v.id,
       name: v.name,
       hasPosition: !!v.position,
@@ -80,10 +110,11 @@ function Dashboard() {
 
   // CRITICAL: Client-side tenant filtering as defensive measure
   // Backend already filters by tenantId, but this ensures no cross-tenant data leaks
-  const filteredVessels = activeVessels?.filter((vessel) => {
+  const filteredVessels = vesselsToDisplay?.filter((vessel) => {
+    if (!tenant?.id && !vessel.tenantId) return true; // Allow demo vessels if no tenant
     if (!tenant?.id) return false;
     // Filter by tenantId - ensure vessel belongs to current tenant
-    return vessel.tenantId === tenant.id;
+    return vessel.tenantId === tenant.id || vessel.tenantId === 'demo-tenant';
   }) || [];
 
   const handleVesselClick = (vessel) => {

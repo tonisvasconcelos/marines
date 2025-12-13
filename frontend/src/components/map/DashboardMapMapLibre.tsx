@@ -38,7 +38,17 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, ten
   const enrichedVessels = useMemo(() => {
     // Simply return database vessels with their stored positions
     // No automatic API calls to save credits
-    return vessels || [];
+    const vesselList = vessels || [];
+    console.log('[DashboardMapMapLibre] enrichedVessels:', {
+      count: vesselList.length,
+      vessels: vesselList.map(v => ({
+        id: v.id,
+        name: v.name,
+        hasPosition: !!v.position,
+        position: v.position,
+      })),
+    });
+    return vesselList;
   }, [vessels]);
 
   // Handle map ready callback
@@ -403,8 +413,8 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, ten
       <MapEngine
         mapContainerRef={mapContainerRef}
         onMapReady={handleMapReady}
-        initialCenter={[-43.1729, -22.9068]} // [lon, lat]
-        initialZoom={8}
+        initialCenter={[-46.6333, -23.5505]} // São Paulo as initial center
+        initialZoom={3} // Adjusted zoom to see multiple continents
         baseLayer={selectedLayers.length > 0 ? selectedLayers[0] : 'standard'}
         selectedLayers={selectedLayers}
         onBaseLayerChange={handleBaseLayerChange}
@@ -414,15 +424,32 @@ function DashboardMapMapLibre({ vessels, geofences, opsSites, onVesselClick, ten
       {/* Vessel Layer - renders vessels with clustering */}
       {/* Only shows database vessels with stored positions - no automatic API calls */}
       {/* Use reactive state instead of ref check to ensure VesselLayer mounts when style is ready */}
-      {isStyleReady && mapRef.current && (
-        <VesselLayer
-          map={mapRef.current}
-          vessels={enrichedVessels} // Database vessels with stored positions only
-          tenantVessels={tenantVessels} // Pass tenant vessels for highlighting
-          onVesselClick={handleVesselClick}
-          onVesselHover={() => {}} // Empty handler - not used in dashboard
-        />
-      )}
+      {(() => {
+        if (isStyleReady && mapRef.current) {
+          console.log('[DashboardMapMapLibre] ✅ Rendering VesselLayer:', {
+            isStyleReady,
+            hasMap: !!mapRef.current,
+            vesselCount: enrichedVessels.length,
+            vessels: enrichedVessels,
+          });
+          return (
+            <VesselLayer
+              map={mapRef.current}
+              vessels={enrichedVessels} // Database vessels with stored positions only
+              tenantVessels={tenantVessels} // Pass tenant vessels for highlighting
+              onVesselClick={handleVesselClick}
+              onVesselHover={() => {}} // Empty handler - not used in dashboard
+            />
+          );
+        } else {
+          console.log('[DashboardMapMapLibre] ⚠️ VesselLayer NOT rendering:', {
+            isStyleReady,
+            hasMap: !!mapRef.current,
+            vesselCount: enrichedVessels.length,
+          });
+          return null;
+        }
+      })()}
       
       {/* Vessel Search - Hidden in dashboard widget, only show in fullscreen mode */}
       {showControls && !isDashboardWidget && (
