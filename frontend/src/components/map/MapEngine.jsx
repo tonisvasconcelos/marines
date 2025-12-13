@@ -94,6 +94,8 @@ export function MapEngine({
       },
       center: initialCenter, // [longitude, latitude]
       zoom: initialZoom,
+      minZoom: 0, // Allow zooming out completely
+      maxZoom: 22, // Allow zooming in very close
       attributionControl: true,
       // Performance optimizations
       antialias: true,
@@ -107,6 +109,15 @@ export function MapEngine({
       keyboard: true, // Enable keyboard navigation
       doubleClickZoom: true, // Enable double-click zoom
       touchZoomRotate: true, // Enable touch gestures
+    });
+
+    // Ensure map canvas is interactive
+    map.once('load', () => {
+      const canvas = map.getCanvasContainer();
+      if (canvas) {
+        canvas.style.pointerEvents = 'auto';
+        canvas.style.touchAction = 'pan-x pan-y pinch-zoom';
+      }
     });
 
     // Add navigation controls (zoom buttons) - only if not hidden
