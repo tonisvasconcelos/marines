@@ -6,9 +6,11 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+// DISABLED: useQuery import not needed since we disabled automatic AIS queries
+// import { useQuery } from '@tanstack/react-query';
 import { FiX, FiExternalLink, FiMap, FiClock } from 'react-icons/fi';
-import { getVesselStatus, getVesselsNearby, getVesselTrack } from '../../api/ais';
+// DISABLED: AIS API imports to save credits
+// import { getVesselStatus, getVesselsNearby, getVesselTrack } from '../../api/ais';
 import styles from './MiniPopup.module.css';
 
 interface MiniPopupProps {
@@ -46,41 +48,55 @@ export function MiniPopup({ vessel, position, onClose, apiKey }: MiniPopupProps)
   const mmsi = vessel.mmsi;
   const imo = vessel.imo;
 
-  // Fetch extended vessel status
-  const { data: vesselStatus, isLoading: statusLoading } = useQuery({
-    queryKey: ['vessel-status', mmsi || imo],
-    queryFn: () => getVesselStatus(mmsi, imo, true), // Extended response
-    enabled: !!(mmsi || imo) && !!apiKey,
-    staleTime: 30000,
-  });
+  // CRITICAL: Disable automatic AIS API calls to save credits
+  // These queries are now disabled by default - users must manually refresh if needed
+  // Use stored vessel data from props instead of fetching from AIS API
+  
+  // DISABLED: Automatic vessel status fetch
+  // const { data: vesselStatus, isLoading: statusLoading } = useQuery({
+  //   queryKey: ['vessel-status', mmsi || imo],
+  //   queryFn: () => getVesselStatus(mmsi, imo, true),
+  //   enabled: false, // DISABLED to save credits
+  //   staleTime: 30000,
+  // });
+  const vesselStatus = null; // Use vessel.position from props instead
+  const statusLoading = false;
 
-  // Fetch nearby vessels
-  const { data: nearbyVessels, isLoading: nearbyLoading } = useQuery({
-    queryKey: ['vessels-nearby', mmsi],
-    queryFn: () => getVesselsNearby(mmsi!, 20, false),
-    enabled: activeTab === 'nearby' && !!mmsi && !!apiKey,
-    staleTime: 60000,
-  });
+  // DISABLED: Automatic nearby vessels fetch
+  // const { data: nearbyVessels, isLoading: nearbyLoading } = useQuery({
+  //   queryKey: ['vessels-nearby', mmsi],
+  //   queryFn: () => getVesselsNearby(mmsi!, 20, false),
+  //   enabled: false, // DISABLED to save credits
+  //   staleTime: 60000,
+  // });
+  const nearbyVessels = null;
+  const nearbyLoading = false;
 
-  // Fetch vessel track
-  const { data: trackPoints, isLoading: trackLoading } = useQuery({
-    queryKey: ['vessel-track', mmsi || imo, showHistory],
-    queryFn: () => {
-      const to = new Date();
-      const from = new Date();
-      from.setDate(from.getDate() - 1); // Last 24 hours
-      return getVesselTrack(mmsi, imo, from, to, undefined, 1);
-    },
-    enabled: showHistory && !!(mmsi || imo) && !!apiKey,
-    staleTime: 300000, // Cache for 5 minutes
-  });
+  // DISABLED: Automatic vessel track fetch
+  // const { data: trackPoints, isLoading: trackLoading } = useQuery({
+  //   queryKey: ['vessel-track', mmsi || imo, showHistory],
+  //   queryFn: () => {
+  //     const to = new Date();
+  //     const from = new Date();
+  //     from.setDate(from.getDate() - 1);
+  //     return getVesselTrack(mmsi, imo, from, to, undefined, 1);
+  //   },
+  //   enabled: false, // DISABLED to save credits
+  //   staleTime: 300000,
+  // });
+  const trackPoints = null;
+  const trackLoading = false;
 
-  const status = vesselStatus || vessel.position || position || {};
-  const vesselType = vesselStatus?.vessel_type || vessel.type || 'Unknown';
+  // Use stored vessel data from props instead of AIS API response
+  const status = vessel.position || position || {};
+  const vesselType = vessel.type || 'Unknown';
 
   // Format coordinates for display (not used for plotting)
   const displayLat = status.lat ? status.lat.toFixed(6) : (status.lat || '---');
   const displayLon = (status.lng || status.lon) ? (status.lng || status.lon).toFixed(6) : '---';
+  
+  // Use status for position data (renamed from 'pos' for clarity)
+  const pos = status;
 
   const handleViewDetails = () => {
     if (vessel.portCallId) {
@@ -129,8 +145,8 @@ export function MiniPopup({ vessel, position, onClose, apiKey }: MiniPopupProps)
 
         <div className={styles.popupRow}>
           <span className={styles.popupLabel}>Status:</span>
-          <span className={`${styles.popupValue} ${styles[`status${status}`]}`}>
-            {status.replace('_', ' ')}
+          <span className={`${styles.popupValue} ${styles[`status${pos.navStatus || vessel.status || 'AT_SEA'}`]}`}>
+            {(pos.navStatus || vessel.status || 'AT_SEA').replace('_', ' ')}
           </span>
         </div>
 
