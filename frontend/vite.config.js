@@ -6,6 +6,8 @@ export default defineConfig({
     react({
       // Ensure React is properly included in the build
       jsxRuntime: 'automatic',
+      // Ensure React is always available
+      jsxImportSource: 'react',
     }),
   ],
   build: {
@@ -16,10 +18,26 @@ export default defineConfig({
     },
     rollupOptions: {
       output: {
-        // Ensure React is not externalized
-        manualChunks: undefined,
+        // Ensure React is not externalized - bundle it with the app
+        manualChunks: (id) => {
+          // Don't split React - keep it in the main bundle
+          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
+            return 'vendor-react';
+          }
+          // Other vendor code can be split
+          if (id.includes('node_modules')) {
+            return 'vendor';
+          }
+        },
       },
     },
+    // Ensure proper minification that doesn't break React
+    minify: 'esbuild',
+    target: 'esnext',
+  },
+  resolve: {
+    // Ensure React is resolved correctly
+    dedupe: ['react', 'react-dom'],
   },
   server: {
     host: '0.0.0.0',
