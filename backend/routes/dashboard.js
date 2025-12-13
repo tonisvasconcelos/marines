@@ -141,7 +141,14 @@ router.get('/active-vessels', async (req, res) => {
   const portCalls = getMockPortCalls(tenantId);
   
   // Log AIS configuration status (always log, not just in dev)
-  const providerName = getProviderName();
+  let providerName = 'unknown';
+  try {
+    providerName = getProviderName();
+  } catch (error) {
+    console.error('[dashboard/active-vessels] Error getting provider name:', error.message);
+    providerName = 'unknown';
+  }
+  
   const hasAisApiKey = providerName.toLowerCase() === 'datalastic' 
     ? !!process.env.DATALASTIC_API_KEY
     : !!(process.env.MYSHIPTRACKING_API_KEY && process.env.MYSHIPTRACKING_SECRET_KEY);
@@ -182,8 +189,21 @@ router.get('/active-vessels', async (req, res) => {
       return null;
     }
     
-    // 3. Check if AIS API is configured
-    const providerName = getProviderName();
+    // 3. Check if we've exceeded the API call limit for this request
+    if (aisApiCallCount >= MAX_AIS_API_CALLS_PER_REQUEST) {
+      console.log(`[getVesselPosition] ⚠️ AIS API call limit reached (${MAX_AIS_API_CALLS_PER_REQUEST}) - skipping fetch for vessel ${vessel.id} (${vessel.name})`);
+      return null;
+    }
+    
+    // 4. Check if AIS API is configured
+    let providerName = 'unknown';
+    try {
+      providerName = getProviderName();
+    } catch (error) {
+      console.error(`[getVesselPosition] Error getting provider name:`, error.message);
+      return null;
+    }
+    
     const isConfigured = providerName.toLowerCase() === 'datalastic'
       ? !!process.env.DATALASTIC_API_KEY
       : !!(process.env.MYSHIPTRACKING_API_KEY && process.env.MYSHIPTRACKING_SECRET_KEY);
@@ -193,7 +213,7 @@ router.get('/active-vessels', async (req, res) => {
       return null;
     }
     
-    // 4. Fetch from AIS API (one-time fetch to populate table)
+    // 5. Fetch from AIS API (one-time fetch to populate table)
     try {
       let identifier, type;
       if (vessel.mmsi) {
@@ -207,9 +227,35 @@ router.get('/active-vessels', async (req, res) => {
         return null;
       }
       
-      console.log(`[getVesselPosition] Fetching position from AIS API for vessel ${vessel.id} (${vessel.name}) - ${type.toUpperCase()}: ${identifier}`);
+      // Validate identifier is not empty after cleaning
+      if (!identifier || identifier.trim() === '') {
+        console.warn(`[getVesselPosition] ⚠️ Empty identifier after cleaning for vessel ${vessel.id} (${vessel.name})`);
+        return null;
+      }
       
-      const freshPosition = await fetchLatestPosition(identifier, { type });
+      console.log(`[getVesselPosition] Fetching position from AIS API for vessel ${vessel.id} (${vessel.name}) - ${type.toUpperCase()}: ${identifier} (API call ${aisApiCallCount + 1}/${MAX_AIS_API_CALLS_PER_REQUEST})`);
+      
+      // Increment API call counter
+      aisApiCallCount++;
+      
+      // Add timeout to prevent hanging requests (10 seconds)
+      const fetchPromise = fetchLatestPosition(identifier, { type });
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('AIS API fetch timeout after 10 seconds')), 10000)
+      );
+      
+      let freshPosition;
+      try {
+        freshPosition = await Promise.race([fetchPromise, timeoutPromise]);
+      } catch (raceError) {
+        // If timeout wins, log and return null
+        if (raceError.message?.includes('timeout')) {
+          console.warn(`[getVesselPosition] ⚠️ AIS API fetch timeout for vessel ${vessel.id} (${vessel.name})`);
+          return null;
+        }
+        // Otherwise re-throw to be caught by outer catch
+        throw raceError;
+      }
       
       if (freshPosition && freshPosition.lat != null && freshPosition.lon != null) {
         // Store in database so future requests use stored data
@@ -244,7 +290,12 @@ router.get('/active-vessels', async (req, res) => {
         console.warn(`[getVesselPosition] ⚠️ AIS API returned no position data for vessel ${vessel.id} (${vessel.name})`);
       }
     } catch (error) {
-      console.warn(`[getVesselPosition] ❌ Failed to fetch AIS position for vessel ${vessel.id} (${vessel.name}):`, error.message);
+      // Log full error details for debugging, but don't break dashboard
+      console.warn(`[getVesselPosition] ❌ Failed to fetch AIS position for vessel ${vessel.id} (${vessel.name}):`, {
+        error: error.message,
+        errorType: error.constructor?.name,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+      });
       // Don't break dashboard - return null gracefully
     }
     
@@ -254,6 +305,10 @@ router.get('/active-vessels', async (req, res) => {
   
   // Track previous statuses for status change detection
   const previousStatuses = new Map();
+  
+  // Track AIS API calls to prevent excessive API usage in a single request
+  let aisApiCallCount = 0;
+  const MAX_AIS_API_CALLS_PER_REQUEST = 10; // Limit to prevent timeouts
   
   // CRITICAL: Get positions for ALL tenant vessels from Last Vessel Positions
   // Process vessels sequentially (database queries are fast, no rate limiting needed)
@@ -307,7 +362,16 @@ router.get('/active-vessels', async (req, res) => {
       // Vessel at sea - get stored position from Last Vessel Positions
       // Uses position history stored in database (no API calls to save credits)
       try {
-        position = await getVesselPosition(vessel);
+        // Wrap in Promise.resolve to catch any synchronous errors
+        position = await Promise.resolve(getVesselPosition(vessel)).catch((err) => {
+          console.error(`[Dashboard] ❌ Error in getVesselPosition promise for vessel ${vessel.id} (${vessel.name}):`, {
+            error: err?.message || String(err),
+            errorType: err?.constructor?.name,
+            stack: process.env.NODE_ENV === 'development' ? err?.stack : undefined,
+          });
+          return null;
+        });
+        
         if (!position) {
           console.warn(`[Dashboard] ⚠️ No position available for vessel ${vessel.id} (${vessel.name}) - MMSI: ${vessel.mmsi}, IMO: ${vessel.imo}, hasIdentifier: ${!!(vessel.mmsi || vessel.imo)}, hasApiKey: ${hasAisApiKey}`);
         } else {
@@ -315,11 +379,13 @@ router.get('/active-vessels', async (req, res) => {
         }
       } catch (error) {
         console.error(`[Dashboard] ❌ Error getting position for vessel ${vessel.id} (${vessel.name}):`, {
-          error: error.message,
+          error: error?.message || String(error),
+          errorType: error?.constructor?.name,
           mmsi: vessel.mmsi,
           imo: vessel.imo,
           hasIdentifier: !!(vessel.mmsi || vessel.imo),
           hasApiKey: hasAisApiKey,
+          stack: process.env.NODE_ENV === 'development' ? error?.stack : undefined,
         });
         position = null;
       }
