@@ -116,6 +116,21 @@ function Dashboard() {
     // Filter by tenantId - ensure vessel belongs to current tenant
     return vessel.tenantId === tenant.id || vessel.tenantId === 'demo-tenant';
   }) || [];
+  
+  // Log filtering results to diagnose issues
+  console.log('[Dashboard] Vessel filtering:', {
+    vesselsToDisplayCount: vesselsToDisplay?.length,
+    filteredVesselsCount: filteredVessels.length,
+    tenantId: tenant?.id,
+    sampleVessel: vesselsToDisplay?.[0],
+    sampleVesselTenantId: vesselsToDisplay?.[0]?.tenantId,
+    filteredVessels: filteredVessels.map(v => ({
+      id: v.id,
+      name: v.name,
+      tenantId: v.tenantId,
+      hasPosition: !!v.position,
+    })),
+  });
 
   const handleVesselClick = (vessel) => {
     if (vessel.portCallId) {
