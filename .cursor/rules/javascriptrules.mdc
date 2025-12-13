@@ -1,0 +1,14 @@
+---
+Prefer modern ES modules, const/let, arrow functions, and template literals.
+
+Do not mutate function arguments or shared state. Use immutable patterns (map, filter, reduce, spread/cloning).
+
+Handle all async code with async/await and proper try/catch, avoid unhandled promise rejections.
+
+Validate and sanitize external input (query params, body payloads, headers) before using it.
+
+Use strict equality (===) and avoid type-coercion surprises.
+
+When adding utilities, place them in a shared utilities/helpers module instead of scattering them across components.
+alwaysApply: true
+---

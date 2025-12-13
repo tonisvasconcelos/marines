@@ -1,0 +1,24 @@
+---
+Follow the existing framework conventions (Express, Nest, etc.) for routing, controllers, and middleware.
+
+Each API endpoint must:
+
+Validate input (body, query, params).
+
+Handle errors with a consistent error structure.
+
+Never leak stack traces or internal details in production responses.
+
+Centralize error handling with middleware; avoid duplicating try/catch formatting in every route.
+
+Log unexpected errors with enough context (endpoint, user/tenant, parameters) but without logging secrets or sensitive data.
+
+Use parameterized queries or ORM query builders; never build SQL with string concatenation.
+
+Respect HTTP semantics: use proper status codes (200, 201, 400, 401, 403, 404, 409, 422, 500).
+
+Keep controllers thin; move business logic into services or domain modules when possible.
+
+When adding new routes, update API documentation (OpenAPI/Swagger/README) if present in the repo.
+alwaysApply: true
+---

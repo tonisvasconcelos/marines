@@ -1,0 +1,9 @@
+When adding or changing behavior, prefer to add or update tests (unit/integration) if the project already includes a testing framework.
+
+Cover critical paths: authentication, tenant filters, permissions checks, and main business rules.
+
+Run existing tests and linting before concluding changes. Fix or update failing tests instead of disabling them.
+
+Avoid TODOs in production code; if necessary, link them to a ticket/issue reference.---
+alwaysApply: true
+---

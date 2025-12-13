@@ -235,7 +235,9 @@ router.delete('/:id/customers/:customerId', (req, res) => {
   res.json({ message: 'Association removed' });
 });
 
-// GET /api/vessels/:id/position - Get current vessel position from AIS
+// GET /api/vessels/:id/position - Get current vessel position
+// CRITICAL: Uses stored positions first to save AIS API credits
+// Only calls AIS API if no stored position exists (manual refresh scenario)
 // This must come before /:id route to avoid route conflicts
 router.get('/:id/position', aisApiLimiter, async (req, res) => {
   const { tenantId } = req;
@@ -248,7 +250,29 @@ router.get('/:id/position', aisApiLimiter, async (req, res) => {
       return res.status(404).json({ message: 'Vessel not found' });
     }
     
-    // Try AIS API (supports both MMSI and IMO)
+    // CRITICAL: Try stored position FIRST to save AIS API credits
+    // Only call AIS API if no stored position exists
+    try {
+      const latestPosition = await vesselDb.getLatestPosition(id, tenantId);
+      if (latestPosition && latestPosition.lat != null && latestPosition.lon != null) {
+        console.log('[Vessel Position] ✅ Using stored position from database (saves API credits):', {
+          vesselId: id,
+          vesselName: vessel.name,
+          source: latestPosition.source || 'stored',
+          lat: latestPosition.lat,
+          lon: latestPosition.lon,
+        });
+        res.json({
+          ...latestPosition,
+          source: latestPosition.source || 'stored',
+        });
+        return;
+      }
+    } catch (error) {
+      console.warn('[Vessel Position] Failed to fetch stored position, will try AIS API:', error.message);
+    }
+    
+    // Fallback: Try AIS API only if no stored position exists (supports both MMSI and IMO)
     let identifier, type;
     if (vessel.mmsi) {
       identifier = String(vessel.mmsi);

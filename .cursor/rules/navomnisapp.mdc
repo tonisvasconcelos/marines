@@ -1,0 +1,23 @@
+---
+Title: Marines App Architecture & Multi-Tenancy
+
+Content:
+For this workspace (Marines maritime SaaS):
+
+- Preserve multi-tenant architecture:
+  - Every DB query that touches tenant-owned data must filter by tenantId.
+  - NEVER mix data across tenants in queries, caching or in-memory structures.
+
+- Backend:
+  - New endpoints must follow our existing pattern: route → controller → service → repository.
+  - Reuse existing middleware for auth, tenant extraction and logging.
+
+- Frontend:
+  - Place new React components in the appropriate feature folder (portcalls, vessels, agents, billing).
+  - For complex pages, split UI into smaller presentational + container components where it makes sense.
+
+- AI / Chat:
+  - Any new AI integration (chat, copilots) must respect tenant boundaries and NEVER expose other tenants’ data.
+
+alwaysApply: true
+---

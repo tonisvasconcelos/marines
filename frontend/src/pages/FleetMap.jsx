@@ -51,10 +51,14 @@ function FleetMap() {
       let processedCount = 0;
 
       portCalls.forEach((portCall) => {
-        // Fetch AIS position for each vessel
+        // CRITICAL: Use stored positions from database to save AIS API credits
+        // Only fetch from AIS API if user explicitly requests it (manual refresh)
+        // For automatic display, use stored positions from vessel_position_history
         api
-          .get(`/ais/vessels/${portCall.vesselId}/last-position`)
-          .then((position) => {
+          .get(`/vessels/${portCall.vesselId}/position-history?limit=1`)
+          .then((history) => {
+            // Get latest stored position (first item in history is most recent)
+            const position = history && history.length > 0 ? history[0] : null;
             // CRITICAL: Extract full-precision coordinates from API response
             // DO NOT round, truncate, or format these values - they are used for map markers
             const rawLat = position?.lat ?? position?.latitude ?? position?.Lat ?? position?.Latitude ?? null;
@@ -106,7 +110,7 @@ function FleetMap() {
             }
           })
           .catch(() => {
-            // If no AIS data, use port coordinates if available
+            // If no stored position data, use port coordinates if available
             // CRITICAL: Port coordinates should also preserve full precision
             if (portCall.port?.coordinates) {
               const rawLat = portCall.port.coordinates.lat ?? portCall.port.coordinates.latitude ?? null;

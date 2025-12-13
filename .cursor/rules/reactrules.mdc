@@ -1,0 +1,22 @@
+---
+Prefer functional components with hooks over class components.
+
+Keep components presentational vs container responsibilities separated when possible (UI vs data fetching/state).
+
+Manage global state with the existing pattern in the repo (e.g., Context, Redux, Zustand). Do not introduce a new state library without strong justification.
+
+Derive UI from state; avoid manual DOM manipulation (document.querySelector, etc.) except when absolutely necessary.
+
+Keep components small: if a component grows beyond ~200 lines or has multiple responsibilities, consider splitting it.
+
+Use controlled components for forms and propagate changes through props or context instead of mutating state in place.
+
+Avoid prop drilling when there is already a global state or context suitable for that data.
+
+Handle loading, empty, and error states explicitly for every async UI (spinners, skeletons, or messages).
+
+When adding new UI, keep styling and layout consistent with the existing design system (components, spacing, colors, typography).
+
+Prefer composition over inheritance: pass children or render props instead of adding many boolean flags.
+alwaysApply: true
+---

@@ -1,0 +1,22 @@
+---
+Always treat tenant isolation as a hard requirement. Never rely solely on the frontend for tenant filtering.
+
+Every data access (read and write) must be scoped by tenantId using the existing mechanism (RLS, ORM filters, or query conditions).
+
+Never trust tenantId coming directly from the client. Derive it from the authenticated user/session/JWT.
+
+When creating new tables or collections, include tenantId fields if the data is tenant-specific.
+
+Ensure that any search, list, or aggregation query cannot return data from other tenants.
+
+When adding background jobs, webhooks, or integrations, always scope them to a tenant and avoid cross-tenant side effects.
+
+Avoid global caches for tenant-specific data; if caching, key by tenant and entity ID.
+
+For logs and audit tables, store tenantId, userId, and timestamp whenever you create or update business-critical records.
+
+Do not expose internal tenant identifiers or implementation details to users; use public IDs or slugs where appropriate.
+
+Before introducing a “public” or “shared” feature, check if it could accidentally bypass tenant isolation.
+alwaysApply: true
+---

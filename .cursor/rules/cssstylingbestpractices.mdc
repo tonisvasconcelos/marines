@@ -1,0 +1,26 @@
+---
+Title: CSS / Styling Best Practices
+
+Content:
+When generating or editing CSS (or CSS-in-JS), follow these rules:
+
+1. Consistency
+- Keep naming conventions consistent (e.g. BEM-ish or simple flat class names).
+- Use one color notation (e.g. hex or HSL) across the project.
+- Use consistent indentation and one property per line.
+
+2. Structure
+- Organize styles into LOGICAL SECTIONS:
+  - General / base styles (body, headings, lists, table basics)
+  - Utilities (e.g. .no-bullets, .flex-center)
+  - Layout / sitewide (header, nav, main layout)
+  - Feature-specific or component-specific styles
+- Prefer class selectors over deeply nested selectors.
+
+3. Maintainability
+- Comment non-obvious CSS, hacks or browser workarounds.
+- Avoid overly specific selectors that are hard to reuse.
+- Prefer reusable utility classes instead of duplicating rules.
+
+alwaysApply: true
+---

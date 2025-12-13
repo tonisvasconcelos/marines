@@ -1,0 +1,17 @@
+---
+Always read the existing codebase and project configuration before creating new files or functions. Prefer extending existing patterns over inventing new ones.
+
+Follow the existing architecture, naming conventions, and folder structure unless there is a clear, documented reason to refactor.
+
+Prefer small, focused, composable functions and components over large monoliths.
+
+Write self-documenting code with meaningful names instead of adding excessive comments.
+
+When adding new dependencies, first check if a similar dependency already exists to avoid duplicates.
+
+Never hard-code secrets, API keys, or credentials. Always use environment variables and existing config mechanisms.
+
+Add or update documentation (README, comments, API docs) whenever you introduce a non-obvious behavior or new feature.
+
+alwaysApply: true
+---

@@ -1,34 +1,38 @@
-# MyShipTracking API Integration - Architecture Review
+# AIS API Integration - Architecture Review
 
-**Date:** 2025-12-11  
+**Date:** 2025-12-11 (Updated: 2025-12-11)  
 **Reviewer:** Senior Full-Stack Engineer  
-**API Documentation:** https://api.myshiptracking.com/
+**API Documentation:** 
+- MyShipTracking: https://api.myshiptracking.com/
+- Datalastic: https://datalastic.com/api-reference/
 
 ---
 
 ## Executive Summary
 
-### Is the current app structure compatible with the MyShipTracking API?
+### Is the current app structure compatible with AIS APIs?
 
-✅ **YES - All Priority Enhancements Completed**
+✅ **YES - Provider Abstraction Layer Implemented**
 
 **Key Findings:**
-- ✅ Backend already has Express.js with a `services/` layer - MyShipTracking service exists
+- ✅ Backend has Express.js with a `services/` layer - AIS provider abstraction implemented
 - ✅ Multi-tenant architecture is well-established with JWT-based tenant isolation
 - ✅ Environment variable configuration pattern exists for API keys
 - ✅ Database schema supports vessels, positions, and port calls
 - ✅ Frontend uses React Query for data fetching - compatible with new endpoints
 - ✅ **COMPLETED:** Rate limiting/caching layer for external APIs implemented
 - ✅ **COMPLETED:** Port and Fleet domain models in database created
-- ✅ **COMPLETED:** Standardized error code mapping for MyShipTracking errors implemented
+- ✅ **COMPLETED:** Standardized error code mapping for AIS providers implemented
+- ✅ **COMPLETED:** Provider abstraction layer supports multiple AIS providers (Datalastic, MyShipTracking)
 - ⚠️ **Note:** Tenant-aware API key configuration (currently global) - Acceptable for current use case
 
 **Main Structural Gaps:**
 1. ~~No caching layer for external API responses~~ ✅ **RESOLVED** - Caching layer implemented
-2. No per-tenant MyShipTracking API key support (single shared key) - Acceptable for current use case
+2. No per-tenant AIS API key support (single shared key) - Acceptable for current use case
 3. ~~Missing Port and Fleet database tables/models~~ ✅ **RESOLVED** - Tables and database functions created
 4. ~~No centralized rate limiting for external API calls~~ ✅ **RESOLVED** - Rate limiter implemented
 5. ~~Error handling exists but needs standardization~~ ✅ **RESOLVED** - Error code mapping implemented
+6. ~~No provider abstraction layer~~ ✅ **RESOLVED** - Provider abstraction layer implemented
 
 ---
 
@@ -42,12 +46,20 @@
 
 **Service Layer Pattern:**
 - ✅ `backend/services/` folder exists
-- ✅ `backend/services/myshiptracking.js` already implemented
-- ✅ Pattern: Direct service modules, not abstracted provider layer
+- ✅ `backend/services/ais/` provider abstraction layer implemented
+- ✅ Pattern: Provider abstraction with factory pattern for multiple AIS providers
 
-**MyShipTracking Service:**
-- Location: `backend/services/myshiptracking.js`
-- Functions: `fetchLatestPosition()`, `fetchTrack()`, `fetchVesselsInZone()`
+**AIS Service Architecture:**
+- Location: `backend/services/ais/`
+- Structure:
+  - `providers/base.js` - Base provider interface
+  - `providers/myshiptracking.js` - MyShipTracking implementation
+  - `providers/datalastic.js` - Datalastic implementation
+  - `providerFactory.js` - Factory to instantiate correct provider
+  - `index.js` - Public API (maintains backward compatibility)
+  - `errors.js` - Unified error handling
+- Functions: `fetchLatestPosition()`, `fetchTrack()`, `fetchVesselsInZone()`, `fetchPortEstimates()`, `fetchPortCalls()`, `fetchVesselsInPort()`
+- Provider Selection: Via `AIS_PROVIDER` environment variable (default: `datalastic`)
 - Authentication: Uses `x-api-key` and `x-api-secret` headers
 - API Version: v2
 - Base URL: `https://api.myshiptracking.com/api/v2/`
@@ -617,29 +629,34 @@ docs/
 
 ## Conclusion
 
-The current architecture is **fully ready** for MyShipTracking integration. All priority enhancements have been completed:
+The current architecture is **fully ready** for multiple AIS provider integration. All priority enhancements have been completed:
 
 1. ✅ **COMPLETED** - Caching and rate limiting for external API calls (critical for cost control)
 2. ✅ **COMPLETED** - Port and Fleet domain models (needed for full API feature support)
 3. ✅ **COMPLETED** - Error handling standardization (improves user experience)
 4. ✅ **COMPLETED** - Input validation (prevents API errors)
+5. ✅ **COMPLETED** - Provider abstraction layer (enables multiple AIS providers)
 
 **Implementation Status:**
 - ✅ All priority recommendations implemented
 - ✅ Caching layer integrated and tested
-- ✅ Rate limiting applied to all MyShipTracking routes
+- ✅ Rate limiting applied to all AIS routes (provider-specific limits)
 - ✅ Database tables and access functions created
 - ✅ Error handling standardized with code mapping
 - ✅ Input validation middleware applied
+- ✅ Provider abstraction layer implemented (Datalastic and MyShipTracking)
 
-**Next Steps (Optional):**
-1. Run database migration to create new tables: `psql $DATABASE_URL -f backend/db/schema.sql`
-2. Create route handlers for ports and fleets (`backend/routes/ports.js`, `backend/routes/fleets.js`)
-3. Add frontend types and components for port/fleet management
-4. Create documentation for MyShipTracking integration
-5. Add background jobs for periodic position refresh (optional)
+**Supported Providers:**
+- **Datalastic** (default): Set `AIS_PROVIDER=datalastic` and `DATALASTIC_API_KEY`
+- **MyShipTracking**: Set `AIS_PROVIDER=myshiptracking` with `MYSHIPTRACKING_API_KEY` and `MYSHIPTRACKING_SECRET_KEY`
 
-The integration is **production-ready** for vessel positions, zones, and tracks. Port and fleet features can be enabled by creating the route handlers and frontend components.
+**Next Steps:**
+1. Set `AIS_PROVIDER=datalastic` and `DATALASTIC_API_KEY` environment variables
+2. Deploy and test with Datalastic API
+3. Monitor API usage and credit consumption
+4. (Optional) Add background jobs for periodic position refresh
+
+The integration is **production-ready** for vessel positions, zones, and tracks with both Datalastic and MyShipTracking providers. Port and fleet features are available for MyShipTracking; Datalastic port endpoints return empty arrays until equivalents are identified.
 
 ---
 
@@ -692,14 +709,32 @@ The integration is **production-ready** for vessel positions, zones, and tracks.
 - **Impact:** Better error messages and user experience
 
 #### 5. Input Validation ✅
-- **File:** `backend/middleware/validateMyShipTracking.js`
+- **File:** `backend/middleware/validateAis.js` (renamed from `validateMyShipTracking.js`)
 - **Features:**
   - MMSI validation (9 digits)
   - IMO validation (7 digits, with/without prefix)
   - Zone bounds validation (lat/lon ranges, size limits)
   - Port ID validation
   - Express middleware for route-level validation
-- **Applied To:** All MyShipTracking API routes
+  - Provider-agnostic validation (works with all AIS providers)
+- **Applied To:** All AIS API routes
+
+#### 6. Provider Abstraction Layer ✅ (NEW)
+- **Files:** 
+  - `backend/services/ais/providers/base.js` - Base provider interface
+  - `backend/services/ais/providers/myshiptracking.js` - MyShipTracking implementation
+  - `backend/services/ais/providers/datalastic.js` - Datalastic implementation
+  - `backend/services/ais/providerFactory.js` - Provider factory
+  - `backend/services/ais/index.js` - Public API
+  - `backend/services/ais/errors.js` - Unified error handling
+- **Features:**
+  - Provider abstraction layer supporting multiple AIS providers
+  - Automatic provider selection via `AIS_PROVIDER` environment variable
+  - Unified function signatures across all providers
+  - Provider-specific rate limiting (Datalastic: 600/min, MyShipTracking: 80/min)
+  - Unified error code mapping for all providers
+  - Backward compatibility maintained
+- **Impact:** Enables switching between AIS providers without code changes
 - **Impact:** Prevents invalid API calls and ERR_VALIDATOR errors
 
 ### Next Steps (Optional Enhancements)

@@ -1,0 +1,14 @@
+---
+Follow the existing styling approach (CSS modules, Tailwind, styled-components, etc.). Do not mix multiple systems without reason.
+
+Prefer utility classes / shared styles over inline styles when possible.
+
+Ensure responsive design: test at least mobile, tablet, and desktop breakpoints for new UI elements.
+
+Avoid magic numbers in spacing and sizing; reuse existing spacing variables/scales defined in the project.
+
+Maintain accessible contrast and legible font sizes. Do not use text smaller than the existing base size.
+
+When introducing new colors or typography, keep them aligned with the current design tokens or theme.
+alwaysApply: true
+---

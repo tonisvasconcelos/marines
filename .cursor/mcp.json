@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "react-mcp": {
+      "command": "node",
+      "args": [
+        "C:/Users/tonis/Documents/AL/MarinesApp/mcp/react-mcp/index.js"
+      ],
+      "cwd": "C:/Users/tonis/Documents/AL/MarinesApp/mcp/react-mcp"
+    }
+  }
+}

@@ -1,0 +1,31 @@
+---
+Title: React Best Practices (Global)
+
+Content:
+When generating or editing React code, ALWAYS follow these rules:
+
+1. Components & structure
+- Prefer FUNCTIONAL components and React hooks (useState, useEffect, useMemo) instead of class components.
+- Use PascalCase for component names (e.g. ShipList, PortCallCard).
+- Use camelCase for variables, functions and hooks (e.g. fetchVessels, usePortCalls).
+
+2. Imports & file structure
+- Group imports in this order:
+  1) Built-in and third-party libraries (react, react-router, axios, etc.)
+  2) Internal modules (utils, services, hooks)
+  3) Components
+  4) Styles
+- Prefer feature-based folders (e.g. src/features/portcalls, src/features/vessels) with subfolders for components, hooks and services.
+
+3. Hooks & logic reuse
+- Extract repeated stateful logic into CUSTOM HOOKS (e.g. usePortCalls, useVesselSearch).
+- Hooks live under hooks/ inside the feature folder.
+- Avoid putting side effects directly in render logic; use useEffect/useMemo properly.
+
+4. Clean code
+- Keep components small and focused; avoid deeply nested JSX.
+- Use prop destructuring and meaningful prop names.
+- Follow DRY: if UI or logic repeats, extract a component or hook.
+
+alwaysApply: true
+---

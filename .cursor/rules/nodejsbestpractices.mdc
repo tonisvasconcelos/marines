@@ -1,0 +1,31 @@
+---
+Title: Node.js / API Architecture Best Practices
+
+Content:
+When generating or editing Node.js / Express code, ALWAYS follow these rules:
+
+1. Architecture & layering
+- Separate concerns: ROUTES → CONTROLLERS → SERVICES → DATA ACCESS.
+- DO NOT put business logic directly inside Express route handlers.
+- Each module should follow Single Responsibility Principle (SRP).
+
+2. Async / errors
+- Use async/await and Promises everywhere in new code.
+- NEVER leave unhandled promise rejections.
+- Centralize error handling (error middleware, unified error format).
+- Throw or propagate errors; do NOT silently catch and ignore.
+
+3. Structure & readability
+- Organize code into feature-based folders (portcalls, vessels, customers) with subfolders for controllers, services, repositories.
+- Use clear, descriptive names for functions, variables and modules.
+- Avoid global state; inject dependencies where possible.
+
+4. Logging & security
+- Use a proper logger (or a consistent console wrapper) for errors and important events.
+- NEVER log secrets or full tokens.
+- Validate all input at the API boundary (e.g. portcall IDs, tenant IDs).
+- Respect multi-tenancy: ALWAYS filter by tenantId where applicable.
+
+
+alwaysApply: true
+---

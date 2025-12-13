@@ -187,14 +187,41 @@ async function runMigrations() {
 }
 
 // Run migrations if executed directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Check multiple ways to detect if this is the main module
+const scriptPath = process.argv[1]?.replace(/\\/g, '/');
+const currentUrl = import.meta.url.replace('file:///', '').replace(/\\/g, '/');
+const isMainModule = scriptPath?.endsWith('runMigrations.js') || 
+                     currentUrl.endsWith('runMigrations.js') ||
+                     process.argv[1]?.includes('runMigrations');
+
+if (isMainModule) {
+  // Check if DATABASE_URL is set
+  if (!process.env.DATABASE_URL) {
+    console.error('\n❌ DATABASE_URL environment variable is not set!');
+    console.error('\nTo run migrations, you need to:');
+    console.error('  1. Get your DATABASE_URL from Railway dashboard');
+    console.error('  2. Set it as an environment variable:');
+    console.error('     Windows PowerShell: $env:DATABASE_URL="your-connection-string"');
+    console.error('     Linux/Mac: export DATABASE_URL="your-connection-string"');
+    console.error('  3. Or run: DATABASE_URL="your-connection-string" node db/runMigrations.js');
+    console.error('\nAlternatively, you can run migrations directly via Railway CLI:');
+    console.error('  railway run node backend/db/runMigrations.js');
+    process.exit(1);
+  }
+  
   runMigrations()
     .then(() => {
       console.log('\n✨ Done!');
       process.exit(0);
     })
     .catch((error) => {
-      console.error('\n💥 Migration error:', error);
+      console.error('\n💥 Migration error:', error.message);
+      if (error.code) {
+        console.error(`   Error code: ${error.code}`);
+      }
+      if (error.stack) {
+        console.error(`   Stack: ${error.stack}`);
+      }
       process.exit(1);
     });
 }
