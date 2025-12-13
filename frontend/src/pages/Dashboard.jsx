@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useI18n } from '../utils/useI18n';
@@ -57,16 +57,45 @@ function Dashboard() {
 
   const { data: activeVessels, isLoading: vesselsLoading, error: vesselsError } = useQuery({
     queryKey: ['dashboard', 'active-vessels'],
-    queryFn: () => api.get('/dashboard/active-vessels'),
+    queryFn: async () => {
+      try {
+        console.log('[Dashboard] Fetching active vessels from API...');
+        const response = await api.get('/dashboard/active-vessels');
+        console.log('[Dashboard] ✅ Active vessels API response:', {
+          response,
+          responseType: typeof response,
+          isArray: Array.isArray(response),
+          length: Array.isArray(response) ? response.length : 'not an array',
+          sample: Array.isArray(response) && response.length > 0 ? response[0] : null,
+        });
+        return response;
+      } catch (error) {
+        console.error('[Dashboard] ❌ Error fetching active vessels:', error);
+        throw error;
+      }
+    },
     refetchInterval: 30000, // Refresh every 30 seconds
     retry: (failureCount, error) => {
       // Don't retry on auth errors
       if (error?.message?.includes('Unauthorized') || error?.message?.includes('Forbidden')) {
+        console.log('[Dashboard] Not retrying due to auth error');
         return false;
       }
+      console.log(`[Dashboard] Retrying active vessels fetch (attempt ${failureCount + 1})`);
       return failureCount < 1;
     },
   });
+  
+  // Log query state changes
+  useEffect(() => {
+    console.log('[Dashboard] useQuery state changed:', {
+      activeVessels,
+      vesselsLoading,
+      vesselsError,
+      hasData: !!activeVessels,
+      dataLength: Array.isArray(activeVessels) ? activeVessels.length : 'not an array',
+    });
+  }, [activeVessels, vesselsLoading, vesselsError]);
 
   // Use demo data if API fails or returns empty, only in development mode
   const vesselsToDisplay = (activeVessels && activeVessels.length > 0) 
