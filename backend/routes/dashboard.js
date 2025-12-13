@@ -233,6 +233,8 @@ router.get('/active-vessels', async (req, res) => {
       }
     }
     
+    console.log(`[Dashboard] Processing vessel ${vessel.id} (${vessel.name}) - Final position:`, position); // Added log
+    
     // Detect status change and log it
     // Only create log if vessel exists in database (skip for mock vessels)
     if (position && previousStatus && previousStatus !== status) {
@@ -641,6 +643,107 @@ router.get('/geofences', async (req, res) => {
     }
     
     res.status(500).json({ message: 'Failed to fetch geofences' });
+  }
+});
+
+// POST /api/dashboard/insert-demo-positions - Insert demo positions for testing
+// This endpoint helps populate vessel positions so they appear on the dashboard map
+router.post('/insert-demo-positions', async (req, res) => {
+  const { tenantId } = req;
+  
+  try {
+    // Get all vessels for the tenant
+    const vessels = await vesselDb.getVessels(tenantId);
+    
+    if (vessels.length === 0) {
+      return res.json({ 
+        message: 'No vessels found for tenant',
+        inserted: 0 
+      });
+    }
+    
+    let inserted = 0;
+    const results = [];
+    
+    // For each vessel, try to find and insert demo positions
+    for (const vessel of vessels) {
+      // Check if vessel already has a position
+      const existingPosition = await vesselDb.getLatestPosition(vessel.id, tenantId);
+      
+      if (existingPosition) {
+        results.push({
+          vesselId: vessel.id,
+          vesselName: vessel.name,
+          status: 'already_has_position',
+          position: existingPosition,
+        });
+        continue;
+      }
+      
+      // Try to find demo position data based on IMO or MMSI
+      let demoPosition = null;
+      
+      // AKOFS SANTOS demo data
+      if (vessel.imo === '9423437' || vessel.mmsi === '710005865' || vessel.name?.includes('AKOFS SANTOS')) {
+        demoPosition = {
+          lat: -24.481873,
+          lon: -44.217957,
+          timestamp: '2025-12-12T20:50:19.000Z',
+          course: 200,
+          heading: 200,
+          speed: null,
+          navStatus: 'AT_SEA',
+        };
+      }
+      
+      // If no demo position found, skip this vessel
+      if (!demoPosition) {
+        results.push({
+          vesselId: vessel.id,
+          vesselName: vessel.name,
+          status: 'no_demo_data',
+          imo: vessel.imo,
+          mmsi: vessel.mmsi,
+        });
+        continue;
+      }
+      
+      // Insert the demo position
+      try {
+        await vesselDb.storePositionHistory(vessel.id, tenantId, {
+          ...demoPosition,
+          source: 'demo',
+        });
+        
+        inserted++;
+        results.push({
+          vesselId: vessel.id,
+          vesselName: vessel.name,
+          status: 'inserted',
+          position: demoPosition,
+        });
+      } catch (error) {
+        results.push({
+          vesselId: vessel.id,
+          vesselName: vessel.name,
+          status: 'error',
+          error: error.message,
+        });
+      }
+    }
+    
+    res.json({
+      message: `Inserted ${inserted} demo positions`,
+      inserted,
+      total: vessels.length,
+      results,
+    });
+  } catch (error) {
+    console.error('[Dashboard] Error inserting demo positions:', error);
+    res.status(500).json({ 
+      message: 'Failed to insert demo positions',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
