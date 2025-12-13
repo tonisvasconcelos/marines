@@ -2,7 +2,7 @@ import express from 'express';
 import { getMockPortCalls, getMockVessels, getMockAisPosition, getMockOpsSites } from '../data/mockData.js';
 import * as vesselDb from '../db/vessels.js';
 import * as operationLogsDb from '../db/operationLogs.js';
-import { getProviderName } from '../services/ais/index.js';
+import { getProviderName, fetchLatestPosition } from '../services/ais/index.js';
 
 const router = express.Router();
 
@@ -153,15 +153,14 @@ router.get('/active-vessels', async (req, res) => {
   });
   
   // Helper function to get vessel position from stored Last Vessel Positions
-  // Uses ONLY stored positions from vessel_position_history table (saves API credits)
-  // Returns null if no stored position exists (vessel won't be plotted on map)
+  // First tries stored positions (saves API credits), falls back to AIS API if missing
+  // Returns null if no position can be obtained (vessel won't be plotted on map)
   const getVesselPosition = async (vessel) => {
-    // Use ONLY stored positions from vessel_position_history table (Last Vessel Positions)
-    // This saves API credits and uses data that's already been recorded
+    // 1. FIRST: Try to get stored position from vessel_position_history table (saves API credits)
     try {
       const storedPosition = await vesselDb.getLatestPosition(vessel.id, tenantId);
       if (storedPosition && storedPosition.lat != null && storedPosition.lon != null) {
-        console.log(`[getVesselPosition] ✅ Using stored position from Last Vessel Positions for vessel ${vessel.id} (${vessel.name}): ${storedPosition.lat.toFixed(4)}, ${storedPosition.lon.toFixed(4)}`);
+        console.log(`[getVesselPosition] ✅ Using stored position for vessel ${vessel.id} (${vessel.name}): ${storedPosition.lat.toFixed(4)}, ${storedPosition.lon.toFixed(4)}`);
         return {
           lat: storedPosition.lat,
           lon: storedPosition.lon,
@@ -172,15 +171,84 @@ router.get('/active-vessels', async (req, res) => {
           navStatus: storedPosition.navStatus,
           source: storedPosition.source || 'stored',
         };
-      } else {
-        console.log(`[getVesselPosition] ⚠️ No stored position in Last Vessel Positions for vessel ${vessel.id} (${vessel.name}) - storedPosition:`, storedPosition);
       }
     } catch (error) {
-      console.error(`[getVesselPosition] ❌ Error fetching stored position for vessel ${vessel.id} (${vessel.name}):`, error);
+      console.error(`[getVesselPosition] Error fetching stored position for vessel ${vessel.id} (${vessel.name}):`, error);
     }
     
-    // No stored position available - return null (vessel won't be plotted on map)
-    // Users can manually refresh position from vessel detail page if needed
+    // 2. FALLBACK: No stored position - fetch from AIS API if vessel has identifier
+    if (!vessel.mmsi && !vessel.imo) {
+      console.log(`[getVesselPosition] ⚠️ Vessel ${vessel.id} (${vessel.name}) has no MMSI/IMO - cannot fetch position`);
+      return null;
+    }
+    
+    // 3. Check if AIS API is configured
+    const providerName = getProviderName();
+    const isConfigured = providerName.toLowerCase() === 'datalastic'
+      ? !!process.env.DATALASTIC_API_KEY
+      : !!(process.env.MYSHIPTRACKING_API_KEY && process.env.MYSHIPTRACKING_SECRET_KEY);
+    
+    if (!isConfigured) {
+      console.log(`[getVesselPosition] ⚠️ AIS API not configured - cannot fetch position for vessel ${vessel.id} (${vessel.name})`);
+      return null;
+    }
+    
+    // 4. Fetch from AIS API (one-time fetch to populate table)
+    try {
+      let identifier, type;
+      if (vessel.mmsi) {
+        identifier = String(vessel.mmsi);
+        type = 'mmsi';
+      } else if (vessel.imo) {
+        // Clean IMO - remove 'IMO' prefix if present (as stored in database)
+        identifier = String(vessel.imo).replace(/^IMO/i, '').trim();
+        type = 'imo';
+      } else {
+        return null;
+      }
+      
+      console.log(`[getVesselPosition] Fetching position from AIS API for vessel ${vessel.id} (${vessel.name}) - ${type.toUpperCase()}: ${identifier}`);
+      
+      const freshPosition = await fetchLatestPosition(identifier, { type });
+      
+      if (freshPosition && freshPosition.lat != null && freshPosition.lon != null) {
+        // Store in database so future requests use stored data
+        try {
+          await vesselDb.storePositionHistory(vessel.id, tenantId, {
+            lat: freshPosition.lat,
+            lon: freshPosition.lon,
+            timestamp: freshPosition.timestamp || new Date().toISOString(),
+            sog: freshPosition.sog,
+            cog: freshPosition.cog,
+            heading: freshPosition.heading,
+            navStatus: freshPosition.navStatus,
+            source: providerName.toLowerCase(),
+          });
+          console.log(`[getVesselPosition] ✅ Position fetched and stored for vessel ${vessel.id} (${vessel.name})`);
+        } catch (storeError) {
+          console.error(`[getVesselPosition] Failed to store position:`, storeError.message);
+          // Continue to return position even if storage fails
+        }
+        
+        return {
+          lat: freshPosition.lat,
+          lon: freshPosition.lon,
+          timestamp: freshPosition.timestamp || new Date().toISOString(),
+          sog: freshPosition.sog,
+          cog: freshPosition.cog,
+          heading: freshPosition.heading,
+          navStatus: freshPosition.navStatus,
+          source: providerName.toLowerCase(),
+        };
+      } else {
+        console.warn(`[getVesselPosition] ⚠️ AIS API returned no position data for vessel ${vessel.id} (${vessel.name})`);
+      }
+    } catch (error) {
+      console.warn(`[getVesselPosition] ❌ Failed to fetch AIS position for vessel ${vessel.id} (${vessel.name}):`, error.message);
+      // Don't break dashboard - return null gracefully
+    }
+    
+    // 5. No position available - return null (vessel won't be plotted on map)
     return null;
   };
   
