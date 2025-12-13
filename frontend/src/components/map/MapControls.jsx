@@ -7,7 +7,7 @@
  * - Auto-center button
  */
 
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import { FiMaximize2, FiMinimize2, FiCrosshair, FiZoomIn } from 'react-icons/fi';
 import styles from './MapControls.module.css';

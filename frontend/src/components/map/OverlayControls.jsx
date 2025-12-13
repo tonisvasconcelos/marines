@@ -4,7 +4,7 @@
  * Supports Standard, Dark, Satellite, Nautical base maps
  */
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { FiMap, FiMoon, FiGlobe, FiAnchor } from 'react-icons/fi';
 import styles from './OverlayControls.module.css';
 

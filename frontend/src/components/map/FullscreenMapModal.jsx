@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import DashboardMapMapLibre from './DashboardMapMapLibre';
 import { FiX } from 'react-icons/fi';
 import styles from './FullscreenMapModal.module.css';

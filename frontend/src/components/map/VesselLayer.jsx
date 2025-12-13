@@ -4,7 +4,7 @@
  * MyShipTracking-style vessel rendering
  */
 
-import { useEffect, useRef, useMemo } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import maplibregl from 'maplibre-gl';
 // Using direct coordinate extraction (same as MapView) instead of normalizeVesselPosition
 

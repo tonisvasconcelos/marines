@@ -4,7 +4,7 @@
  * Provides MyShipTracking-style vector tile rendering
  */
 
-import { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { normalizeVesselPosition } from '../../utils/coordinateUtils';
