@@ -723,11 +723,19 @@ export function VesselLayer({ map, vessels, tenantVessels = [], onVesselClick, o
     return () => {
       // CRITICAL: Check if map exists and is still valid before cleanup
       if (!map) {
+        console.log('[VesselLayer] Cleanup skipped - map is null/undefined');
         return;
       }
       
       // Check if map methods are available (map might be destroyed or in invalid state)
       if (typeof map.getLayer !== 'function' || typeof map.removeLayer !== 'function') {
+        console.log('[VesselLayer] Cleanup skipped - map methods not available');
+        return;
+      }
+      
+      // Additional check: verify map object has required properties
+      if (!map || typeof map !== 'object') {
+        console.log('[VesselLayer] Cleanup skipped - map is not a valid object');
         return;
       }
       
