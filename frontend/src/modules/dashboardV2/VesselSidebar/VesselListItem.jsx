@@ -4,7 +4,7 @@
  * Shows vessel info, handles missing positions
  */
 
-import { useCallback } from 'react';
+import React, { useCallback } from 'react';
 import { getVesselStatusColor } from '../VesselMap/vesselIcons';
 import styles from '../styles/sidebar.module.css';
 

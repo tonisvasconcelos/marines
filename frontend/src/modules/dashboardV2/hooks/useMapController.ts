@@ -4,7 +4,7 @@
  * Handles fit bounds, centering on vessels, zoom management
  */
 
-import { useCallback, useRef } from 'react';
+import React, { useCallback, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
 import { Vessel } from './useStoredVessels';
 

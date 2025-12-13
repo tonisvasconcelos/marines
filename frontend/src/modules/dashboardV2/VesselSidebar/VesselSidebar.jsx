@@ -4,7 +4,7 @@
  * Flightradar24-style sidebar
  */
 
-import { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { VesselSearch } from './VesselSearch';
 import { VesselListItem } from './VesselListItem';
 import styles from '../styles/sidebar.module.css';

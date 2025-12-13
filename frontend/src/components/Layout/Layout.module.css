@@ -18,6 +18,21 @@
   /* Remove padding here - let individual pages handle their own padding */
   /* This prevents double padding and allows pages to control their spacing */
   padding: 0;
+  position: relative; /* Allow absolute positioning for full-screen pages */
+  min-height: 0; /* Allow flex children to shrink */
+  overflow: hidden; /* Prevent scrollbars for full-screen dashboard */
+}
+
+/* Full-screen dashboard override - allow dashboard to take full space */
+.main > div[class*="dashboard"] {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
 }
 
 .overlay {

@@ -4,20 +4,25 @@
  * Flightradar24-style layout
  */
 
+import React from 'react';
 import { VesselMap } from './VesselMap/VesselMap';
 import { VesselSidebar } from './VesselSidebar/VesselSidebar';
 import styles from './styles/dashboard.module.css';
 
 export function DashboardLayout({
-  allVessels,
-  vesselsWithPositions,
-  selectedVesselId,
+  allVessels = [],
+  vesselsWithPositions = [],
+  selectedVesselId = null,
   onVesselClick,
   onVesselSelect,
 }) {
   const handleVesselClick = (vessel) => {
-    onVesselSelect(vessel);
-    onVesselClick(vessel);
+    if (onVesselSelect) {
+      onVesselSelect(vessel);
+    }
+    if (onVesselClick) {
+      onVesselClick(vessel);
+    }
   };
 
   return (

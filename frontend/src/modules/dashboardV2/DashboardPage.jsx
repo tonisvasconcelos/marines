@@ -17,6 +17,7 @@
  * - No position records are created or updated
  */
 
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStoredVessels } from './hooks/useStoredVessels';
 import { useVesselSelection } from './hooks/useVesselSelection';
@@ -44,10 +45,18 @@ export function DashboardPage() {
     );
   }
 
+  if (isLoading) {
+    return (
+      <div className={styles.errorContainer}>
+        <h2>Loading vessels...</h2>
+      </div>
+    );
+  }
+
   return (
     <DashboardLayout
-      allVessels={allVessels}
-      vesselsWithPositions={vesselsWithPositions}
+      allVessels={allVessels || []}
+      vesselsWithPositions={vesselsWithPositions || []}
       selectedVesselId={selectedVesselId}
       onVesselClick={handleVesselClick}
       onVesselSelect={selectVessel}

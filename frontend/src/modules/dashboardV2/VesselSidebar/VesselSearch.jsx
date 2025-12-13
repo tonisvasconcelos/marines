@@ -3,7 +3,7 @@
  * Search/filter input for vessels
  */
 
-import { useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import styles from '../styles/sidebar.module.css';
 
 export function VesselSearch({

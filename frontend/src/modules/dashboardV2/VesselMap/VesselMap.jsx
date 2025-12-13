@@ -4,7 +4,7 @@
  * Integrates with existing VesselLayer for rendering
  */
 
-import { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
 import { MapEngine } from '../../../components/map/MapEngine';
 import { VesselLayer } from '../../../components/map/VesselLayer';
@@ -125,7 +125,7 @@ export function VesselMap({
       {mapRef.current && (
         <VesselLayer
           map={mapRef.current}
-          vessels={vessels}
+          vessels={vessels || []}
           tenantVessels={[]}
           onVesselClick={handleVesselClick}
           onVesselHover={handleVesselHover}
