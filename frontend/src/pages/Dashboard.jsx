@@ -1,21 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useI18n } from '../utils/useI18n';
 import { useAuth } from '../modules/auth/AuthContext';
 import { api } from '../utils/api';
-import DashboardMapMapLibre from '../components/map/DashboardMapMapLibre';
+import DashboardMapLeaflet from '../components/map/DashboardMapLeaflet';
 import OpsKpiBar from '../modules/dashboard/OpsKpiBar';
-import OpsEventFeed from '../modules/dashboard/OpsEventFeed';
-import OpsStatsPanel from '../modules/dashboard/OpsStatsPanel';
-import DashboardMapWidget from '../components/map/DashboardMapWidget';
 import styles from './Dashboard.module.css';
 
 function Dashboard() {
   const { t } = useI18n();
   const navigate = useNavigate();
   const { tenant } = useAuth();
-  const [isMapFullscreen, setIsMapFullscreen] = useState(false);
 
   // STEP 1: Fetch vessels with their latest positions for this tenant
   const { data: activeVessels = [], isLoading: vesselsLoading } = useQuery({
@@ -93,51 +89,30 @@ function Dashboard() {
 
   return (
     <div className={styles.dashboard}>
-      <div className={styles.header}>
-        <h1>{t('dashboard.title')}</h1>
-        <span className={styles.liveIndicator}>AO VIVO</span>
+      {/* Full-screen map container */}
+      <div className={styles.mapContainer}>
+        <DashboardMapLeaflet
+          vessels={vesselsWithPositions}
+          onVesselClick={handleVesselClick}
+        />
       </div>
 
-      <OpsKpiBar stats={stats} />
-
-      <div className={styles.contentGrid}>
-        {/* Left Column: Map Widget */}
-        <div className={styles.mapWidgetContainer}>
-          <DashboardMapWidget
-            vessels={vesselsWithPositions} // STEP 3: Pass vessels with positions to map
-            tenantVessels={vesselsWithPositions}
-            onVesselClick={handleVesselClick}
-            onExpand={() => setIsMapFullscreen(true)}
-          />
-        </div>
-
-        {/* Right Column: Stats and Events */}
-        <div className={styles.statsContainer}>
-          <OpsStatsPanel stats={stats} vessels={vesselsWithPositions} />
-          <OpsEventFeed events={events} />
-        </div>
-      </div>
-
-      {/* Fullscreen Map Modal */}
-      {isMapFullscreen && (
-        <div className={styles.fullscreenMapOverlay} onClick={() => setIsMapFullscreen(false)}>
-          <div className={styles.fullscreenMapContainer} onClick={(e) => e.stopPropagation()}>
-            <button 
-              className={styles.closeMapButton}
-              onClick={() => setIsMapFullscreen(false)}
-            >
-              ×
-            </button>
-            <DashboardMapMapLibre
-              vessels={vesselsWithPositions}
-              tenantVessels={vesselsWithPositions}
-              onVesselClick={handleVesselClick}
-              showControls={true}
-              isDashboardWidget={false}
-            />
+      {/* Overlay container system */}
+      <div className={styles.overlayContainer}>
+        {/* Status header bar */}
+        <div className={styles.statusHeader}>
+          <h1 className={styles.title}>{t('dashboard.title')}</h1>
+          <div className={styles.statusIndicator}>
+            <span className={styles.statusDot}></span>
+            <span>AO VIVO</span>
           </div>
         </div>
-      )}
+
+        {/* KPI Bar Overlay - Top Left */}
+        <div className={styles.kpiOverlay}>
+          <OpsKpiBar stats={stats} />
+        </div>
+      </div>
     </div>
   );
 }
