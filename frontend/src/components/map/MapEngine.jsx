@@ -98,6 +98,15 @@ export function MapEngine({
       // Performance optimizations
       antialias: true,
       preserveDrawingBuffer: true,
+      // Ensure map is interactive (zoom, pan, rotate)
+      interactive: true,
+      scrollZoom: true, // Enable mouse wheel zoom
+      boxZoom: true, // Enable box zoom
+      dragRotate: false, // Disable drag to rotate (use Ctrl+drag)
+      dragPan: true, // Enable drag to pan
+      keyboard: true, // Enable keyboard navigation
+      doubleClickZoom: true, // Enable double-click zoom
+      touchZoomRotate: true, // Enable touch gestures
     });
 
     // Add navigation controls (zoom buttons) - only if not hidden
